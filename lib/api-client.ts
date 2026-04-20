@@ -13,10 +13,16 @@ import type {
   WorkflowListResponse,
   WorkflowRunResponse,
   WorkflowUpdateRequest,
+  WorkflowPreviewRequest,
+  WorkflowPreviewResponse,
   TransitionResponse,
   SetTransitionRequest,
   SessionData,
   MessageHistoryResponse,
+  Preset,
+  PresetCreateRequest,
+  PresetListResponse,
+  PresetUpdateRequest,
 } from "@/types";
 import { API_ROUTES } from "@/config";
 import { pushClientLog } from "@/lib/client-logger";
@@ -101,7 +107,7 @@ export const boardApi = {
 
   setTransition: (body: SetTransitionRequest) =>
     request<TransitionResponse>(API_ROUTES.transitionSet, {
-      method: "POST",
+      method: "PUT",
       body: JSON.stringify(body),
     }),
 
@@ -144,5 +150,32 @@ export const workflowApi = {
     request<WorkflowRunResponse>(API_ROUTES.workflowsRunner, {
       method: "POST",
       body: JSON.stringify({ mode: "single", workflowId: id }),
+    }),
+
+  preview: (body: WorkflowPreviewRequest) =>
+    request<WorkflowPreviewResponse>(API_ROUTES.workflowsPreview, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
+export const presetApi = {
+  list: () => request<PresetListResponse>(API_ROUTES.presets),
+
+  create: (body: PresetCreateRequest) =>
+    request<Preset>(API_ROUTES.presets, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  update: (id: string, body: PresetUpdateRequest) =>
+    request<Preset>(`${API_ROUTES.presets}/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  remove: (id: string) =>
+    request<{ success: boolean }>(`${API_ROUTES.presets}/${id}`, {
+      method: "DELETE",
     }),
 };

@@ -1,15 +1,21 @@
 import type { WorkflowSchedule, WorkflowScheduleType } from "@/types";
 
+/** Zero-pads a number to at least 2 digits. */
 function pad(n: number) {
   return n.toString().padStart(2, "0");
 }
 
+/** Truncates seconds and milliseconds so comparisons are always minute-aligned. */
 function startOfMinute(date: Date) {
   const d = new Date(date);
   d.setSeconds(0, 0);
   return d;
 }
 
+/**
+ * Parses an "HH:mm" time string into hour/minute numbers.
+ * Returns 09:00 as a safe fallback on any parse failure.
+ */
 function parseHHMM(value: string) {
   const [h, m] = value.split(":").map(Number);
   if (Number.isNaN(h) || Number.isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) {
@@ -18,6 +24,10 @@ function parseHHMM(value: string) {
   return { h, m };
 }
 
+/**
+ * Returns the next wall-clock occurrence of the given HH:mm time.
+ * If the time has already passed today, returns tomorrow's occurrence.
+ */
 function nextDaily(now: Date, timeHHMM: string) {
   const { h, m } = parseHHMM(timeHHMM);
   const next = new Date(now);
@@ -26,6 +36,12 @@ function nextDaily(now: Date, timeHHMM: string) {
   return next;
 }
 
+/**
+ * Returns the next occurrence of a weekly schedule.
+ * Scans up to 8 days forward to find the closest matching weekday
+ * (0 = Sunday, 1 = Monday, …, 6 = Saturday).
+ * Falls back to 7 days from now if no match is found in the scan window.
+ */
 function nextWeekly(now: Date, timeHHMM: string, daysOfWeek: number[]) {
   const safeDays = daysOfWeek.length ? daysOfWeek : [1];
   const { h, m } = parseHHMM(timeHHMM);
@@ -41,7 +57,12 @@ function nextWeekly(now: Date, timeHHMM: string, daysOfWeek: number[]) {
   return fallback;
 }
 
-// Minimal cron support: "m h * * *" (minute + hour only)
+/**
+ * Minimal cron resolver supporting only the first two cron fields: "minute hour * * *".
+ * Iterates minute-by-minute from `now+1m` up to 14 days forward until a matching
+ * minute+hour combination is found. Wildcards (`*`) match every value in their field.
+ * Falls back to daily at 09:00 if the expression is malformed or yields no match.
+ */
 function nextSimpleCron(now: Date, cron: string) {
   const parts = cron.trim().split(/\s+/);
   if (parts.length < 2) return nextDaily(now, "09:00");
@@ -63,6 +84,13 @@ function nextSimpleCron(now: Date, cron: string) {
   return nextDaily(now, "09:00");
 }
 
+/**
+ * Calculates the next ISO timestamp at which a workflow should run.
+ * Returns `null` for one-time schedules whose trigger time has already passed.
+ *
+ * @param schedule - The workflow's schedule configuration
+ * @param now - Reference time (defaults to current system time)
+ */
 export function computeNextRunAt(schedule: WorkflowSchedule, now: Date = new Date()): string | null {
   const current = startOfMinute(now);
 
@@ -87,6 +115,7 @@ export function computeNextRunAt(schedule: WorkflowSchedule, now: Date = new Dat
   return null;
 }
 
+/** Returns a human-readable description of the schedule for display in the UI. */
 export function getScheduleSummary(schedule: WorkflowSchedule) {
   if (schedule.type === "once") return schedule.at ? `One-time at ${schedule.at}` : "One-time (unscheduled)";
   if (schedule.type === "daily") return `Daily at ${schedule.timeHHMM ?? "09:00"}`;
@@ -94,6 +123,10 @@ export function getScheduleSummary(schedule: WorkflowSchedule) {
   return `Cron: ${schedule.cron ?? "0 9 * * *"}`;
 }
 
+/**
+ * Returns true when `nextRunAt` is at or before `now`, meaning the workflow is due.
+ * Used by the runner to identify which workflows should execute on the current tick.
+ */
 export function shouldRunNow(nextRunAt?: string, now: Date = new Date()) {
   if (!nextRunAt) return false;
   return new Date(nextRunAt).getTime() <= now.getTime();

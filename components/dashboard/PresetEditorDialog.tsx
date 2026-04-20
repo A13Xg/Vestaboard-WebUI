@@ -3,17 +3,18 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, Card, CardHeader, CardTitle, CardDescription, Input } from "@/components/ui";
-import type { Preset, TextAlignment } from "@/types";
+import type { Preset, PresetCreateRequest, PresetUpdateRequest, TextAlignment } from "@/types";
 
 interface PresetEditorDialogProps {
   open: boolean;
   mode: "create" | "edit";
   initialPreset?: Preset | null;
   onClose: () => void;
-  onSave: (value: Omit<Preset, "id">, id?: string) => void;
+  onSave: (value: PresetCreateRequest | PresetUpdateRequest, id?: string) => void;
+  onDelete?: (id: string) => void;
 }
 
-export function PresetEditorDialog({ open, mode, initialPreset, onClose, onSave }: PresetEditorDialogProps) {
+export function PresetEditorDialog({ open, mode, initialPreset, onClose, onSave, onDelete }: PresetEditorDialogProps) {
   const [label, setLabel] = useState("");
   const [text, setText] = useState("");
   const [alignment, setAlignment] = useState<TextAlignment>("center");
@@ -123,6 +124,11 @@ export function PresetEditorDialog({ open, mode, initialPreset, onClose, onSave 
                 )}
 
                 <div className="flex justify-end gap-2 pt-2">
+                  {mode === "edit" && initialPreset?.id && onDelete && (
+                    <Button variant="destructive" size="sm" onClick={() => onDelete(initialPreset.id)}>
+                      Delete
+                    </Button>
+                  )}
                   <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
                   <Button variant="primary" size="sm" onClick={save}>
                     {mode === "create" ? "Add Preset" : "Save Preset"}

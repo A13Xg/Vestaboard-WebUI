@@ -54,7 +54,7 @@ export function QuickActionGrid({
   hasDraft,
   className,
 }: QuickActionGridProps) {
-  const actions: ActionItem[] = [
+  const allActions: ActionItem[] = [
     { id: "compose", label: "Compose", icon: PenLine, variant: "primary", onClick: onCompose },
     { id: "send", label: "Send to Board", icon: Send, variant: "secondary", onClick: onSend, disabled: !hasDraft || sending },
     { id: "preset", label: "Load Preset", icon: LayoutTemplate, variant: "outline", onClick: onLoadPreset },
@@ -62,6 +62,8 @@ export function QuickActionGrid({
     { id: "transition", label: "Transitions", icon: Settings2, variant: "ghost", onClick: onTransitionSettings },
     { id: "clear", label: "Clear Draft", icon: Trash2, variant: "destructive", onClick: onClearDraft, disabled: !hasDraft },
   ];
+  // Hide draft-specific actions when no draft is active to avoid permanently-disabled buttons
+  const actions = hasDraft ? allActions : allActions.filter((a) => a.id !== "send" && a.id !== "clear");
 
   return (
     <motion.div

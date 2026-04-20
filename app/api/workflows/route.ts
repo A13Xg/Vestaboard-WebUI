@@ -12,7 +12,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized", detail: "Missing or invalid session cookie" }, { status: 401 });
     }
 
-    return NextResponse.json(listWorkflows());
+    return NextResponse.json(await listWorkflows());
   } catch (err) {
     return unexpectedError("workflows.list", err);
   }
@@ -37,20 +37,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Workflow schedule type is required" }, { status: 400 });
     }
 
-    const messageValidation = validateMessageText(body.message.text, "flagship");
-    if (!messageValidation.valid) {
-      return NextResponse.json({ error: messageValidation.error }, { status: 400 });
+    let messageText = body.message.text;
+    if (!body.dataSource) {
+      const messageValidation = validateMessageText(body.message.text, "flagship");
+      if (!messageValidation.valid) {
+        return NextResponse.json({ error: messageValidation.error }, { status: 400 });
+      }
+      messageText = messageValidation.normalizedText;
     }
 
-    const created = createWorkflow({
+    const created = await createWorkflow({
       name: body.name.trim(),
       enabled: !!body.enabled,
       message: {
-        text: messageValidation.normalizedText,
+        text: messageText,
         alignment: body.message.alignment ?? "center",
         style: body.message.style ?? "default",
         colorInserts: body.message.colorInserts ?? [],
       },
+      dataSource: body.dataSource ?? null,
       schedule: body.schedule,
     });
 

@@ -5,6 +5,13 @@ import { sendMessageToVestaboard } from "@/lib/vestaboard-server";
 import { unexpectedError } from "@/lib/api-error";
 import { validateMatrix, validateMessageText } from "@/lib/message-validation";
 
+/**
+ * POST /api/vestaboard/send
+ * Accepts either a `text` string (validated + converted to matrix server-side)
+ * or a pre-built `matrix` array. One of the two must be present.
+ * The request is proxied server-side so the Vestaboard API key is never exposed
+ * to the browser.
+ */
 export async function POST(req: NextRequest) {
   try {
     const { isAuthenticated, session } = await requireSession();

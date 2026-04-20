@@ -13,7 +13,7 @@ export async function GET(_: NextRequest, context: { params: Promise<{ id: strin
     }
 
     const { id } = await context.params;
-    const workflow = getWorkflow(id);
+    const workflow = await getWorkflow(id);
     if (!workflow) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
     }
@@ -34,7 +34,13 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const { id } = await context.params;
     const patch = (await req.json()) as WorkflowUpdateRequest;
 
-    if (patch.message?.text !== undefined) {
+    const existing = await getWorkflow(id);
+    if (!existing) {
+      return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
+    }
+
+    const resultingDataSource = patch.dataSource !== undefined ? patch.dataSource : existing.dataSource;
+    if (patch.message?.text !== undefined && !resultingDataSource) {
       const messageValidation = validateMessageText(patch.message.text, "flagship");
       if (!messageValidation.valid) {
         return NextResponse.json({ error: messageValidation.error }, { status: 400 });
@@ -43,7 +49,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       patch.message.text = messageValidation.normalizedText;
     }
 
-    const updated = updateWorkflow(id, patch);
+    const updated = await updateWorkflow(id, patch);
     if (!updated) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
     }
@@ -62,7 +68,7 @@ export async function DELETE(_: NextRequest, context: { params: Promise<{ id: st
     }
 
     const { id } = await context.params;
-    const removed = deleteWorkflow(id);
+    const removed = await deleteWorkflow(id);
     if (!removed) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
     }

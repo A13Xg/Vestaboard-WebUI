@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "presets": [
+    {
+      "id": "preset-3",
+      "label": "Open 9-5",
+      "text": "OPEN 9AM TO 5PM",
+      "alignment": "center",
+      "createdAt": "2026-04-19T00:00:00.000Z",
+      "updatedAt": "2026-04-19T00:00:00.000Z"
+    },
+    {
+      "id": "preset-4",
+      "label": "Meeting Room A",
+      "text": "MEETING IN ROOM A",
+      "alignment": "left",
+      "createdAt": "2026-04-19T00:00:00.000Z",
+      "updatedAt": "2026-04-19T00:00:00.000Z"
+    },
+    {
+      "id": "preset-5",
+      "label": "Coffee Break",
+      "text": "COFFEE BREAK - BACK IN 15",
+      "alignment": "center",
+      "createdAt": "2026-04-19T00:00:00.000Z",
+      "updatedAt": "2026-04-19T00:00:00.000Z"
+    },
+    {
+      "id": "preset-6",
+      "label": "Do Not Disturb",
+      "text": "DO NOT DISTURB",
+      "alignment": "center",
+      "createdAt": "2026-04-19T00:00:00.000Z",
+      "updatedAt": "2026-04-19T00:00:00.000Z"
+    }
+  ]
+}

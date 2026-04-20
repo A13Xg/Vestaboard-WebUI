@@ -5,11 +5,14 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Wifi, Moon, Sun, KeyRound, Sliders } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Badge, Button } from "@/components/ui";
-import { boardApi } from "@/lib/api-client";
-import { authApi } from "@/lib/api-client";
-import type { CurrentDisplayResponse } from "@/types";
+import { TransitionSelector } from "@/components/board";
+import { boardApi, authApi } from "@/lib/api-client";
+import type { CurrentDisplayResponse, VestaboardTransition } from "@/types";
 import { pushClientLog } from "@/lib/client-logger";
 import { useBoardModel } from "@/hooks/use-board-model";
+import { toast } from "@/hooks/use-toast";
+
+const DEFAULT_TRANSITION: VestaboardTransition = { transition: "classic", transitionSpeed: "gentle" };
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -45,6 +48,8 @@ export default function SettingsPage() {
   const { model, setModel, profile } = useBoardModel();
   const [connectivity, setConnectivity] = useState<{ connected: boolean; reason: string | null; statusCode: number } | null>(null);
   const [currentDisplay, setCurrentDisplay] = useState<CurrentDisplayResponse | null>(null);
+  const [transition, setTransition] = useState<VestaboardTransition>(DEFAULT_TRANSITION);
+  const [applyingTransition, setApplyingTransition] = useState(false);
 
   async function refreshConnectivityAndBoard() {
     const conn = await boardApi.connectivity();
@@ -82,7 +87,21 @@ export default function SettingsPage() {
 
   useEffect(() => {
     void refreshConnectivityAndBoard();
+    boardApi.getTransition().then((result) => {
+      if (!result.error) setTransition(result.data);
+    });
   }, []);
+
+  async function applyTransition() {
+    setApplyingTransition(true);
+    const result = await boardApi.setTransition(transition);
+    if (result.error) {
+      toast(result.error.error, "error");
+    } else {
+      toast(`Transition set: ${transition.transition} / ${transition.transitionSpeed}`, "success");
+    }
+    setApplyingTransition(false);
+  }
 
   return (
     <div className="p-4 lg:p-6 max-w-[720px] mx-auto">
@@ -142,12 +161,12 @@ export default function SettingsPage() {
               <CardDescription>Theme and display preferences</CardDescription>
             </CardHeader>
             <CardContent>
-              <SettingsRow label="Theme" description="Dark mode is default">
+              <SettingsRow label="Theme" description="Dark mode only — light theme coming soon">
                 <div className="flex gap-1">
                   <Button variant="secondary" size="xs">
                     <Moon className="w-3 h-3" /> Dark
                   </Button>
-                  <Button variant="ghost" size="xs">
+                  <Button variant="ghost" size="xs" disabled title="Light theme not yet available">
                     <Sun className="w-3 h-3" /> Light
                   </Button>
                 </div>
@@ -167,12 +186,17 @@ export default function SettingsPage() {
               <CardDescription>Display behavior and transition preferences</CardDescription>
             </CardHeader>
             <CardContent>
-              <SettingsRow label="Default Transition" description="Effect applied when sending new messages">
-                <Badge variant="indigo">Fade</Badge>
+              <SettingsRow label="Transition" description="Effect applied when sending new messages to the board">
+                <div />
               </SettingsRow>
-              <SettingsRow label="Transition Speed" description="Speed of transition animations">
-                <Badge variant="default">Normal</Badge>
-              </SettingsRow>
+              <div className="pb-3 border-b border-neutral-800/60">
+                <TransitionSelector
+                  value={transition}
+                  onChange={setTransition}
+                  onApply={applyTransition}
+                  applying={applyingTransition}
+                />
+              </div>
               <SettingsRow label="Board Model" description="Target device format">
                 <Badge variant="default">{profile.rows}x{profile.cols}</Badge>
               </SettingsRow>

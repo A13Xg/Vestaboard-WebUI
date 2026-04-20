@@ -6,6 +6,7 @@ import { SidebarProvider } from "@/components/layout/SidebarContext";
 import { Sidebar } from "@/components/navigation";
 import { HeaderBar } from "@/components/navigation";
 import { LogDock } from "@/components/feedback";
+import { WorkflowRunnerHeartbeat } from "@/components/workflows/WorkflowRunnerHeartbeat";
 import { useBoardState } from "@/hooks/use-board-state";
 import { useSession } from "@/hooks/use-session";
 import { pushClientLog } from "@/lib/client-logger";
@@ -40,6 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <HeaderBar onRefresh={refresh} syncing={syncing} />
+          <WorkflowRunnerHeartbeat />
           <main className="flex-1 overflow-y-auto">
             {children}
           </main>

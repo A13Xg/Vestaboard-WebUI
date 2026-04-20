@@ -134,32 +134,62 @@ export interface Preset {
   colorInserts?: ColorInsert[];
   isFavorite?: boolean;
   usedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PresetCreateRequest {
+  label: string;
+  description?: string;
+  text: string;
+  style?: TextStyle;
+  alignment?: TextAlignment;
+  colorInserts?: ColorInsert[];
+}
+
+export interface PresetUpdateRequest {
+  label?: string;
+  description?: string;
+  text?: string;
+  style?: TextStyle;
+  alignment?: TextAlignment;
+  colorInserts?: ColorInsert[];
+}
+
+export interface PresetListResponse {
+  presets: Preset[];
 }
 
 // ─── Transitions ────────────────────────────────────────────────────────────
 
-export interface TransitionOption {
-  id: string;
-  label: string;
-  description?: string;
-  durationMs?: number;
+/** Style values accepted by the Vestaboard Cloud API */
+export type TransitionStyle = "classic" | "wave" | "drift" | "curtain";
+
+/** Speed values accepted by the Vestaboard Cloud API */
+export type TransitionSpeed = "gentle" | "fast";
+
+/** Shape returned by GET /transition and PUT /transition on the Vestaboard Cloud API */
+export interface VestaboardTransition {
+  transition: TransitionStyle;
+  transitionSpeed: TransitionSpeed;
 }
 
-export interface TransitionSettings {
-  selectedId: string;
-  speed: "slow" | "normal" | "fast";
-}
-
-export interface TransitionResponse {
-  available: TransitionOption[];
-  current: TransitionSettings;
-}
-
-export interface SetTransitionRequest extends TransitionSettings {}
+export type TransitionResponse = VestaboardTransition;
+export type SetTransitionRequest = VestaboardTransition;
 
 // ─── Workflows ──────────────────────────────────────────────────────────────
 
 export type WorkflowScheduleType = "once" | "daily" | "weekly" | "cron";
+
+export type WorkflowDataSourceProviderId =
+  | "weather"
+  | "crypto"
+  | "stocks"
+  | "news"
+  | "quote"
+  | "exchange-rates"
+  | "time"
+  | "joke";
 
 export interface WorkflowSchedule {
   type: WorkflowScheduleType;
@@ -177,22 +207,57 @@ export interface WorkflowMessageTemplate {
   colorInserts?: ColorInsert[];
 }
 
+export interface WorkflowDataSource {
+  providerId: WorkflowDataSourceProviderId;
+  config: Record<string, string>;
+}
+
+export interface WorkflowExecutionState {
+  success: boolean;
+  executedAt: string;
+  renderedText?: string;
+  summary?: string;
+  error?: string;
+}
+
+export interface WorkflowIntegrationFieldDefinition {
+  key: string;
+  label: string;
+  placeholder?: string;
+  defaultValue?: string;
+  helpText?: string;
+}
+
+export interface WorkflowIntegrationDefinition {
+  id: WorkflowDataSourceProviderId;
+  label: string;
+  description: string;
+  category: "utility" | "finance" | "content" | "news" | "system";
+  priority: "public" | "free-api-key" | "paid";
+  defaultTemplate: string;
+  availableVariables: string[];
+  fields: WorkflowIntegrationFieldDefinition[];
+}
+
 export interface Workflow {
   id: string;
   name: string;
   enabled: boolean;
   message: WorkflowMessageTemplate;
+  dataSource?: WorkflowDataSource | null;
   schedule: WorkflowSchedule;
   createdAt: string;
   updatedAt: string;
   nextRunAt: string | null;
   lastRunAt: string | null;
+  lastExecution?: WorkflowExecutionState | null;
 }
 
 export interface WorkflowCreateRequest {
   name: string;
   enabled: boolean;
   message: WorkflowMessageTemplate;
+  dataSource?: WorkflowDataSource | null;
   schedule: WorkflowSchedule;
 }
 
@@ -200,6 +265,7 @@ export interface WorkflowUpdateRequest {
   name?: string;
   enabled?: boolean;
   message?: Partial<WorkflowMessageTemplate>;
+  dataSource?: WorkflowDataSource | null;
   schedule?: Partial<WorkflowSchedule>;
 }
 
@@ -218,6 +284,22 @@ export interface WorkflowRunResult {
 export interface WorkflowRunResponse {
   triggered: number;
   results: WorkflowRunResult[];
+}
+
+export interface WorkflowPreviewRequest {
+  message: WorkflowMessageTemplate;
+  dataSource?: WorkflowDataSource | null;
+}
+
+export interface WorkflowPreviewResponse {
+  renderedText: string;
+  variables: Record<string, string>;
+  providerLabel?: string;
+}
+
+export interface WorkflowFile {
+  version: number;
+  workflows: Workflow[];
 }
 
 // ─── Draft ──────────────────────────────────────────────────────────────────

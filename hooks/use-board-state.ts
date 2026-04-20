@@ -7,9 +7,17 @@ import { MOCK_CURRENT_DISPLAY } from "@/lib/mock-data";
 import { pushClientLog } from "@/lib/client-logger";
 
 interface UseBoardStateOptions {
+  /** Set to false to prevent auto-fetch and disable all board interactions. */
   enabled?: boolean;
 }
 
+/**
+ * Manages the live Vestaboard board state: fetches the current display on mount,
+ * exposes a `refresh` callback, and tracks sync status.
+ *
+ * `didAutoRefresh` is a ref (not state) so the auto-refresh effect only runs once
+ * per component lifetime without triggering an extra render.
+ */
 export function useBoardState(options: UseBoardStateOptions = {}) {
   const { enabled = true } = options;
   const [display, setDisplay] = useState<CurrentDisplayResponse>(MOCK_CURRENT_DISPLAY);

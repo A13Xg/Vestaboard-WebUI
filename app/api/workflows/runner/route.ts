@@ -4,10 +4,16 @@ import { requireSession } from "@/lib/server-auth";
 import { unexpectedError } from "@/lib/api-error";
 
 interface RunnerBody {
+  /** "due" runs all overdue enabled workflows; "single" targets one workflow by id. */
   mode?: "due" | "single";
   workflowId?: string;
 }
 
+/**
+ * Accepts the CRON_SECRET in either the `X-Cron-Secret` header or a Bearer token
+ * so the route can be triggered both by Vercel Cron Jobs and custom schedulers.
+ * When CRON_SECRET is not configured this always returns false (secret guard disabled).
+ */
 function hasCronSecret(req: NextRequest) {
   const expected = process.env.CRON_SECRET;
   if (!expected) return false;
@@ -17,6 +23,13 @@ function hasCronSecret(req: NextRequest) {
   return provided === expected || bearer === expected;
 }
 
+/**
+ * POST /api/workflows/runner
+ * Dual-auth: accepts either a valid session cookie (browser/UI calls)
+ * or the CRON_SECRET header (automated scheduler calls).
+ * Body: `{ mode: "due" }` — runs all overdue workflows.
+ * Body: `{ mode: "single", workflowId }` — runs one workflow immediately.
+ */
 export async function POST(req: NextRequest) {
   try {
     const { isAuthenticated } = await requireSession();

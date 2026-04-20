@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { CurrentDisplayCard } from "@/components/dashboard/CurrentDisplayCard";
@@ -8,14 +9,15 @@ import { QuickActionGrid } from "@/components/dashboard/QuickActionGrid";
 import { PresetCard } from "@/components/dashboard/PresetCard";
 import { PresetEditorDialog } from "@/components/dashboard/PresetEditorDialog";
 import { MessageHistoryCard } from "@/components/dashboard/MessageHistoryCard";
+import { UpcomingStatsCard } from "@/components/dashboard/UpcomingStatsCard";
 import { ComposeDrawer } from "@/components/forms/ComposeDrawer";
 import { ConfirmDialog } from "@/components/overlays/ConfirmDialog";
 import { Card, CardHeader, CardTitle, CardDescription, Button } from "@/components/ui";
 import { useBoardState } from "@/hooks/use-board-state";
-import { MOCK_PRESETS } from "@/lib/mock-data";
+import { presetApi } from "@/lib/api-client";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import type { Preset } from "@/types";
+import type { BoardMatrix, MessageHistoryEntry, Preset, PresetCreateRequest, PresetUpdateRequest } from "@/types";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -28,83 +30,131 @@ const fadeUp = {
 
 export default function DashboardPage() {
   const { display, syncing, refresh } = useBoardState();
+  const router = useRouter();
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeInitialText, setComposeInitialText] = useState("");
+  const [composeInitialMatrix, setComposeInitialMatrix] = useState<BoardMatrix | undefined>(undefined);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [presetsCollapsed, setPresetsCollapsed] = useState(false);
-  const [presets, setPresets] = useState<Preset[]>(MOCK_PRESETS);
+  const [presets, setPresets] = useState<Preset[]>([]);
   const [editingPreset, setEditingPreset] = useState<Preset | null>(null);
   const [createPresetOpen, setCreatePresetOpen] = useState(false);
-  const [hasDraft] = useState(false);
 
-  const savePreset = (value: Omit<Preset, "id">, id?: string) => {
-    if (!id) {
-      const created: Preset = {
-        id: `preset-${Date.now()}`,
-        ...value,
-      };
-      setPresets((prev) => [created, ...prev]);
-      setCreatePresetOpen(false);
-      toast(`Preset created: ${created.label}`, "success");
+  async function refreshPresets() {
+    const result = await presetApi.list();
+    if (result.error) {
+      toast(result.error.error, "error");
       return;
     }
 
-    setPresets((prev) => prev.map((preset) => (
-      preset.id === id ? { ...preset, ...value } : preset
-    )));
+    setPresets(result.data.presets);
+  }
+
+  useEffect(() => {
+    void refreshPresets();
+  }, []);
+
+  function openComposeWithPreset(preset: Preset) {
+    setComposeInitialMatrix(undefined);
+    setComposeInitialText(preset.text);
+    setComposeOpen(true);
+  }
+
+  function openComposeWithHistory(item: MessageHistoryEntry) {
+    setComposeInitialMatrix(item.matrix);
+    setComposeInitialText(item.text ?? "");
+    setComposeOpen(true);
+    toast("Loaded message into composer", "success");
+  }
+
+  const savePreset = async (value: PresetCreateRequest | PresetUpdateRequest, id?: string) => {
+    const result = id
+      ? await presetApi.update(id, value)
+      : await presetApi.create(value as PresetCreateRequest);
+
+    if (result.error) {
+      toast(result.error.error, "error");
+      return;
+    }
+
+    if (id) {
+      setEditingPreset(null);
+      toast("Preset updated", "success");
+    } else {
+      setCreatePresetOpen(false);
+      toast(`Preset created: ${result.data.label}`, "success");
+    }
+
+    await refreshPresets();
+  };
+
+  const deletePreset = async (id: string) => {
+    const result = await presetApi.remove(id);
+    if (result.error) {
+      toast(result.error.error, "error");
+      return;
+    }
+
     setEditingPreset(null);
-    toast("Preset updated", "success");
+    toast("Preset deleted", "success");
+    await refreshPresets();
   };
 
   return (
     <div className="p-4 lg:p-6 max-w-[1400px] mx-auto">
-      {/* Two-column layout on large screens */}
+      {/* Board display */}
+      <motion.div custom={0} variants={fadeUp} initial="hidden" animate="show" className="mx-auto max-w-[980px]">
+        <CurrentDisplayCard
+          display={display}
+          loading={syncing}
+          onRefresh={refresh}
+        />
+      </motion.div>
+
       <div
         className={cn(
-          "grid grid-cols-1 gap-5",
+          "grid grid-cols-1 gap-5 mt-5",
           presetsCollapsed ? "xl:grid-cols-[minmax(0,1fr)_56px]" : "xl:grid-cols-[minmax(0,1fr)_320px]"
         )}
       >
-
-        {/* ── Left / Main column ─────────────────────────────── */}
         <div className="flex flex-col gap-5 min-w-0">
-
-          {/* Current display */}
-          <motion.div custom={0} variants={fadeUp} initial="hidden" animate="show">
-            <CurrentDisplayCard
-              display={display}
-              loading={syncing}
-              onRefresh={refresh}
-            />
+          <motion.div custom={1} variants={fadeUp} initial="hidden" animate="show">
+            <UpcomingStatsCard presetsCount={presets.length} />
           </motion.div>
 
-          {/* Quick actions */}
-          <motion.div custom={1} variants={fadeUp} initial="hidden" animate="show">
+          <motion.div custom={2} variants={fadeUp} initial="hidden" animate="show">
             <Card variant="inset" padding="md">
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
                 <CardDescription>Common board operations</CardDescription>
               </CardHeader>
               <QuickActionGrid
-                onCompose={() => setComposeOpen(true)}
+                onCompose={() => {
+                  setComposeInitialMatrix(undefined);
+                  setComposeInitialText("");
+                  setComposeOpen(true);
+                }}
                 onSend={() => toast("No draft to send", "warning")}
                 onRefresh={refresh}
                 onClearDraft={() => setClearConfirmOpen(true)}
-                onTransitionSettings={() => toast("Transitions coming soon", "default")}
-                onLoadPreset={() => toast("Preset picker coming soon", "default")}
-                hasDraft={hasDraft}
+                onTransitionSettings={() => router.push("/settings#transition")}
+                onLoadPreset={() => {
+                  if (presets.length === 0) {
+                    toast("No presets available", "warning");
+                    return;
+                  }
+                  openComposeWithPreset(presets[0]);
+                }}
+                hasDraft={false}
                 sending={false}
               />
             </Card>
           </motion.div>
 
-          <motion.div custom={2} variants={fadeUp} initial="hidden" animate="show">
-            <MessageHistoryCard />
-          </motion.div>
         </div>
 
-        {/* ── Right / Sidebar column ─────────────────────────── */}
         <div className="flex flex-col gap-5">
-          <motion.div custom={3} variants={fadeUp} initial="hidden" animate="show">
+          <motion.div custom={4} variants={fadeUp} initial="hidden" animate="show">
             <Card variant="inset" padding="md">
               <CardHeader className="pb-2">
                 <div className={cn("flex gap-2", presetsCollapsed ? "items-center justify-center" : "items-center justify-between")}>
@@ -142,7 +192,7 @@ export default function DashboardPage() {
                     <PresetCard
                       key={preset.id}
                       preset={preset}
-                      onSelect={() => toast(`Loading preset: ${preset.label}`, "default")}
+                      onSelect={() => openComposeWithPreset(preset)}
                       onEdit={() => setEditingPreset(preset)}
                     />
                   ))}
@@ -157,17 +207,29 @@ export default function DashboardPage() {
               )}
             </Card>
           </motion.div>
+
+          <motion.div custom={5} variants={fadeUp} initial="hidden" animate="show">
+            <MessageHistoryCard
+              onSelectMessage={openComposeWithHistory}
+              collapsible
+              defaultCollapsed
+            />
+          </motion.div>
         </div>
       </div>
 
-      {/* Compose Drawer */}
       <ComposeDrawer
         open={composeOpen}
-        onClose={() => setComposeOpen(false)}
+        onClose={() => {
+          setComposeOpen(false);
+          setComposeInitialText("");
+          setComposeInitialMatrix(undefined);
+        }}
+        initialText={composeInitialText}
+        initialMatrix={composeInitialMatrix}
         onSend={refresh}
       />
 
-      {/* Clear draft confirm */}
       <ConfirmDialog
         open={clearConfirmOpen}
         title="Clear draft?"
@@ -194,6 +256,7 @@ export default function DashboardPage() {
         initialPreset={editingPreset}
         onClose={() => setEditingPreset(null)}
         onSave={savePreset}
+        onDelete={deletePreset}
       />
     </div>
   );

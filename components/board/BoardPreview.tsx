@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { BoardGrid } from "./BoardGrid";
 import type { BoardMatrix } from "@/types";
+import type { TransitionStyle, TransitionSpeed } from "@/types";
 import { useBoardModel } from "@/hooks/use-board-model";
 
 interface BoardPreviewProps {
@@ -13,17 +14,36 @@ interface BoardPreviewProps {
   className?: string;
   /** Override cell size in px — auto-calculated from container if omitted */
   cellSize?: number;
+  /** Vestaboard transition style to visualise */
+  transition?: TransitionStyle;
+  /** Vestaboard transition speed to visualise */
+  transitionSpeed?: TransitionSpeed;
+  /** When true, loops the chosen transition animation every few seconds */
+  animatePreview?: boolean;
 }
 
 const GAP = 2;
 const FRAME_PADDING = 20; // px on each side
 
-export function BoardPreview({ matrix, loading, className, cellSize: propCellSize }: BoardPreviewProps) {
+// ─── Duration helpers ─────────────────────────────────────────────────────────
+
+function enterDuration(speed: TransitionSpeed | undefined): number {
+  return speed === "fast" ? 0.45 : 0.95;
+}
+
+function exitDuration(speed: TransitionSpeed | undefined): number {
+  return speed === "fast" ? 0.2 : 0.45;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function BoardPreview({ matrix, loading, className, cellSize: propCellSize, transition, transitionSpeed, animatePreview }: BoardPreviewProps) {
   const { profile } = useBoardModel();
   const rows = profile.rows;
   const cols = profile.cols;
   const containerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(propCellSize ?? 14);
+  const [animationSeed, setAnimationSeed] = useState(0);
 
   useEffect(() => {
     if (propCellSize) return;
@@ -38,6 +58,28 @@ export function BoardPreview({ matrix, loading, className, cellSize: propCellSiz
     if (containerRef.current) ro.observe(containerRef.current);
     return () => ro.disconnect();
   }, [propCellSize, cols]);
+
+  useEffect(() => {
+    if (!animatePreview || !transition) return;
+    const idleMs = 2800;
+    const enterMs = enterDuration(transitionSpeed) * 1000;
+    const exitMs = exitDuration(transitionSpeed) * 1000;
+    const period = Math.round(idleMs + enterMs + exitMs);
+    const timer = setInterval(() => {
+      setAnimationSeed((prev) => prev + 1);
+    }, period);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [animatePreview, transition, transitionSpeed]);
+
+  // Re-trigger transition animation when message or settings change.
+  useEffect(() => {
+    setAnimationSeed((prev) => prev + 1);
+  }, [matrix, transition, transitionSpeed]);
+
+  const animateCells = !!animatePreview && !!transition;
 
   return (
     <motion.div
@@ -87,7 +129,18 @@ export function BoardPreview({ matrix, loading, className, cellSize: propCellSiz
                 "radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.4) 100%)",
             }}
           />
-          <BoardGrid matrix={matrix} rows={rows} cols={cols} loading={loading} cellSize={cellSize} />
+
+          <BoardGrid
+            matrix={matrix}
+            rows={rows}
+            cols={cols}
+            loading={loading}
+            cellSize={cellSize}
+            transitionStyle={transition}
+            transitionSpeed={transitionSpeed}
+            animateCells={animateCells}
+            animationSeed={animationSeed}
+          />
         </div>
       </div>
 
@@ -96,3 +149,6 @@ export function BoardPreview({ matrix, loading, className, cellSize: propCellSiz
     </motion.div>
   );
 }
+
+
+

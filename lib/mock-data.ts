@@ -2,9 +2,6 @@ import type {
   BoardMessage,
   CurrentDisplayResponse,
   Preset,
-  TransitionOption,
-  TransitionSettings,
-  Draft,
 } from "@/types";
 import { BOARD_ROWS, BOARD_COLS } from "@/config";
 
@@ -49,34 +46,3 @@ export const MOCK_PRESETS: Preset[] = [
   { id: "preset-6", label: "Do Not Disturb", text: "DO NOT DISTURB", alignment: "center" },
 ];
 
-export const MOCK_DRAFTS: Draft[] = [
-  {
-    id: "draft-1",
-    text: "TEAM STANDUP AT 10AM",
-    alignment: "center",
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000).toISOString(),
-    label: "Standup reminder",
-  },
-  {
-    id: "draft-2",
-    text: "HAPPY FRIDAY EVERYONE",
-    alignment: "center",
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    updatedAt: new Date(Date.now() - 7200000).toISOString(),
-  },
-];
-
-export const MOCK_TRANSITIONS: TransitionOption[] = [
-  { id: "none", label: "Instant", description: "No transition" },
-  { id: "fade", label: "Fade", description: "Smooth fade between states", durationMs: 600 },
-  { id: "slide-left", label: "Slide Left", description: "Wipe from right to left", durationMs: 800 },
-  { id: "slide-right", label: "Slide Right", description: "Wipe from left to right", durationMs: 800 },
-  { id: "scroll-up", label: "Scroll Up", description: "Content scrolls upward", durationMs: 1000 },
-  { id: "clock", label: "Clock Flip", description: "Classic split-flap reveal", durationMs: 1200 },
-];
-
-export const MOCK_TRANSITION_SETTINGS: TransitionSettings = {
-  selectedId: "fade",
-  speed: "normal",
-};

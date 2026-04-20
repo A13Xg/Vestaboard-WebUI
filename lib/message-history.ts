@@ -11,6 +11,10 @@ const EMPTY_HISTORY: MessageHistoryFile = {
   messages: [],
 };
 
+/**
+ * Global write-lock chain for the message history file. Stored on `global` so it
+ * survives hot-reloads in Next.js dev mode, preventing concurrent writes from racing.
+ */
 declare global {
   // eslint-disable-next-line no-var
   var __messageHistoryWrite: Promise<void> | undefined;
@@ -45,6 +49,12 @@ async function writeHistoryFile(file: MessageHistoryFile) {
   await fs.writeFile(HISTORY_FILE_PATH, JSON.stringify(file, null, 2), "utf8");
 }
 
+/**
+ * Appends a new entry to the message history, serialising writes through the
+ * global promise chain to prevent file corruption under concurrent requests.
+ * The `matrix` is stored as a JSON string in `layout` for compact persistence.
+ * Entries beyond MAX_HISTORY_ITEMS are silently dropped (newest-first).
+ */
 export async function appendMessageHistory(entry: Omit<MessageHistoryEntry, "id" | "timestamp" | "layout"> & { matrix: BoardMatrix }) {
   const appendTask = async () => {
     const file = await readHistoryFile();

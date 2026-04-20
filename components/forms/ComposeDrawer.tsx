@@ -1,31 +1,54 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Ban, Eraser, Send, Save } from "lucide-react";
+import { Ban, Eraser, Send, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { Drawer } from "@/components/overlays";
 import { Button } from "@/components/ui";
-import { BoardComposerEditor, BoardPreview } from "@/components/board";
+import { BoardComposerEditor, BoardPreview, TransitionSelector } from "@/components/board";
 import { boardApi } from "@/lib/api-client";
 import { emptyMatrix, matrixHasContent, matrixToPlainText, normalizeMatrixSize, textToMatrix } from "@/lib/board-utils";
 import { toast } from "@/hooks/use-toast";
-import type { BoardMatrix } from "@/types";
+import type { BoardMatrix, VestaboardTransition } from "@/types";
 import { useBoardModel } from "@/hooks/use-board-model";
+
+const DEFAULT_TRANSITION: VestaboardTransition = { transition: "classic", transitionSpeed: "gentle" };
 
 interface ComposeDrawerProps {
   open: boolean;
   onClose: () => void;
   initialText?: string;
+  initialMatrix?: BoardMatrix;
   onSend?: () => void;
 }
 
-export function ComposeDrawer({ open, onClose, initialText = "", onSend }: ComposeDrawerProps) {
+export function ComposeDrawer({ open, onClose, initialText = "", initialMatrix, onSend }: ComposeDrawerProps) {
   const { profile } = useBoardModel();
   const [sending, setSending] = useState(false);
   const [composeMatrix, setComposeMatrix] = useState<BoardMatrix>(() => textToMatrix(initialText, profile.rows, profile.cols));
+  const [transition, setTransition] = useState<VestaboardTransition>(DEFAULT_TRANSITION);
+  const [transitionExpanded, setTransitionExpanded] = useState(false);
+  const [applyingTransition, setApplyingTransition] = useState(false);
 
   useEffect(() => {
     setComposeMatrix((prev) => normalizeMatrixSize(prev, profile.rows, profile.cols));
   }, [profile.rows, profile.cols]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialMatrix && initialMatrix.length > 0) {
+      setComposeMatrix(normalizeMatrixSize(initialMatrix, profile.rows, profile.cols));
+      return;
+    }
+    setComposeMatrix(textToMatrix(initialText, profile.rows, profile.cols));
+  }, [open, initialText, initialMatrix, profile.rows, profile.cols]);
+
+  // Load current transition settings when drawer opens
+  useEffect(() => {
+    if (!open) return;
+    boardApi.getTransition().then((result) => {
+      if (!result.error) setTransition(result.data);
+    });
+  }, [open]);
 
   const clearAll = () => {
     setComposeMatrix(emptyMatrix(profile.rows, profile.cols));
@@ -57,6 +80,13 @@ export function ComposeDrawer({ open, onClose, initialText = "", onSend }: Compo
     }
 
     setSending(true);
+
+    // Apply transition first (best-effort, non-blocking on failure)
+    const transResult = await boardApi.setTransition(transition);
+    if (transResult.error) {
+      toast(`Transition unavailable: ${transResult.error.error}`, "warning");
+    }
+
     const result = await boardApi.send({
       text: matrixToPlainText(composeMatrix),
       matrix: composeMatrix,
@@ -71,6 +101,17 @@ export function ComposeDrawer({ open, onClose, initialText = "", onSend }: Compo
       toast(result.error.error, "error");
     }
     setSending(false);
+  };
+
+  const handleApplyTransitionOnly = async () => {
+    setApplyingTransition(true);
+    const result = await boardApi.setTransition(transition);
+    if (result.error) {
+      toast(result.error.error, "error");
+    } else {
+      toast(`Transition set: ${transition.transition} / ${transition.transitionSpeed}`, "success");
+    }
+    setApplyingTransition(false);
   };
 
   return (
@@ -91,8 +132,45 @@ export function ComposeDrawer({ open, onClose, initialText = "", onSend }: Compo
         <div>
           <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Preview</span>
           <div className="mt-2">
-            <BoardPreview matrix={composeMatrix} />
+            <BoardPreview
+              matrix={composeMatrix}
+              transition={transition.transition}
+              transitionSpeed={transition.transitionSpeed}
+              animatePreview
+            />
           </div>
+        </div>
+
+        {/* Transition selector — collapsible */}
+        <div className="border border-neutral-800 rounded-lg overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setTransitionExpanded((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800/40 transition-colors"
+          >
+            <span>
+              Transition:{" "}
+              <span className="text-blue-400 capitalize">
+                {transition.transition} / {transition.transitionSpeed}
+              </span>
+            </span>
+            {transitionExpanded ? (
+              <ChevronUp className="w-3.5 h-3.5 text-neutral-500" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5 text-neutral-500" />
+            )}
+          </button>
+          {transitionExpanded && (
+            <div className="px-3 pb-3 pt-1 border-t border-neutral-800">
+              <TransitionSelector
+                value={transition}
+                onChange={setTransition}
+                compact
+                onApply={handleApplyTransitionOnly}
+                applying={applyingTransition}
+              />
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -108,7 +186,7 @@ export function ComposeDrawer({ open, onClose, initialText = "", onSend }: Compo
           <Button variant="outline" size="md" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="secondary" size="md">
+          <Button variant="secondary" size="md" onClick={() => toast("Draft saving is not yet available", "warning")}>
             <Save className="w-4 h-4" />
             Save Draft
           </Button>
@@ -121,3 +199,5 @@ export function ComposeDrawer({ open, onClose, initialText = "", onSend }: Compo
     </Drawer>
   );
 }
+
+

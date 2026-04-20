@@ -23,8 +23,10 @@ export const API_ROUTES = {
   transitionSet: "/api/vestaboard/transition",
   vestaboardConnectivity: "/api/vestaboard/connectivity",
   messageHistory: "/api/messages/history",
+  presets: "/api/presets",
   workflows: "/api/workflows",
   workflowsRunner: "/api/workflows/runner",
+  workflowsPreview: "/api/workflows/preview",
 } as const;
 
 export const BOARD_BG = "#1a1a1a";

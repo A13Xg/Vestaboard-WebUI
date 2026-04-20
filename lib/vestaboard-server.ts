@@ -20,6 +20,10 @@ function getApiToken() {
   return process.env.VESTABOARD_API_TOKEN;
 }
 
+/**
+ * Runtime type-guard: confirms the value is a non-empty 2-D array of numbers,
+ * matching the Vestaboard character-code matrix format.
+ */
 function isMatrix(value: unknown): value is BoardMatrix {
   return (
     Array.isArray(value) &&
@@ -28,6 +32,10 @@ function isMatrix(value: unknown): value is BoardMatrix {
   );
 }
 
+/**
+ * Normalises any matrix to exactly BOARD_ROWS × BOARD_COLS.
+ * Extra rows/columns are trimmed; missing ones are filled with 0 (blank).
+ */
 function normalizeMatrix(input: BoardMatrix): BoardMatrix {
   const normalized = Array.from({ length: BOARD_ROWS }, () => Array(BOARD_COLS).fill(0));
   for (let r = 0; r < Math.min(input.length, BOARD_ROWS); r++) {
@@ -48,6 +56,11 @@ function parseLayoutString(value: unknown): BoardMatrix | null {
   }
 }
 
+/**
+ * Walks the multiple response shapes returned by the Vestaboard RW API
+ * (bare matrix, `currentMessage.layout`, `message.layout`, `characters`, etc.)
+ * and returns the first valid `BoardMatrix` found, or `null` if none match.
+ */
 function extractMatrix(data: unknown): BoardMatrix | null {
   if (isMatrix(data)) return data;
   if (typeof data !== "object" || data === null) return null;
@@ -193,7 +206,7 @@ export async function sendMessageToVestaboard(body: SendRequest, historyContext:
 
   const matrix = body.matrix
     ? normalizeMatrixSize(body.matrix, profile.rows, profile.cols)
-    : textToMatrix(body.text ?? "", profile.rows, profile.cols);
+    : textToMatrix(body.text ?? "", profile.rows, profile.cols, body.alignment ?? "left");
   const resolvedText = (typeof body.text === "string" && body.text.trim().length > 0)
     ? body.text
     : matrixToPlainText(matrix);

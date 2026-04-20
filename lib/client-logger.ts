@@ -10,18 +10,29 @@ export interface ClientLogEntry {
 
 type Listener = () => void;
 
+/**
+ * In-memory log ring buffer. Intentionally module-level (not React state) so logs
+ * persist across renders and are accessible from server-side code in the same process.
+ * Capped at MAX_LOGS entries; oldest entries are evicted when the limit is exceeded.
+ */
 const listeners = new Set<Listener>();
 const entries: ClientLogEntry[] = [];
 const MAX_LOGS = 500;
 
+/** Notifies all registered listeners that the log has changed. */
 function emit() {
   listeners.forEach((listener) => listener());
 }
 
+/** Returns a shallow copy of all current log entries, oldest-first. */
 export function getClientLogs() {
   return [...entries];
 }
 
+/**
+ * Subscribes a callback that fires whenever a log entry is added or cleared.
+ * Returns an unsubscribe function for use in useEffect cleanup.
+ */
 export function subscribeClientLogs(listener: Listener) {
   listeners.add(listener);
   return () => {
