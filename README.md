@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Vestaboard WebUI
 
-## Getting Started
+Production-oriented Next.js control panel for authenticated Vestaboard operations.
 
-First, run the development server:
+## Stack
+
+- Next.js App Router + TypeScript
+- Tailwind CSS
+- Framer Motion
+- React Hook Form + Zod
+- Lucide React
+- Iron Session (secure cookie auth)
+
+## Environment Variables
+
+Create `.env.local` from `.env.local.example` and set:
+
+- `SESSION_SECRET`: session cookie encryption secret
+- `ACCESS_CODE`: server-validated login code
+- `VESTABOARD_API_TOKEN`: Vestaboard read/write API key
+- `CRON_SECRET`: secret for scheduled workflow runner authorization
+
+## Local Commands
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run build
+npm run start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Windows batch helper:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bat
+.\build-and-live-test.bat
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Architecture Overview
 
-## Learn More
+- `app/(app)/*`: authenticated UI shell (dashboard, compose, workflows, settings)
+- `app/login/*`: access-code login
+- `app/api/auth/*`: login/logout/session server routes
+- `app/api/vestaboard/*`: secure Vestaboard proxy routes
+- `app/api/workflows/*`: CRUD + execution routes for automated workflows
+- `components/*`: reusable UI/layout/feature components
+- `lib/*`: server/client utilities, workflow scheduler/store, API wrappers
+- `types/index.ts`: DTOs and domain interfaces
 
-To learn more about Next.js, take a look at the following resources:
+## Workflow Scheduling
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The app supports creating and modifying automated workflows with schedule types:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Once (`type: once`, ISO datetime)
+- Daily (`type: daily`, `HH:mm`)
+- Weekly (`type: weekly`, `HH:mm` + weekdays)
+- Cron (`type: cron`, basic `minute hour * * *` support)
 
-## Deploy on Vercel
+Key endpoints:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `GET/POST /api/workflows`
+- `GET/PATCH/DELETE /api/workflows/:id`
+- `POST /api/workflows/runner`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`/api/workflows/runner` supports:
+
+- Session-authenticated manual execution from UI
+- Cron execution via `CRON_SECRET` (Bearer token or `x-cron-secret`)
+
+## Vercel Scheduled Execution
+
+`vercel.json` includes a cron schedule:
+
+- `*/5 * * * *` -> `POST /api/workflows/runner`
+
+Set `CRON_SECRET` in Vercel project environment variables for secure triggering.
+
+## Current Integration Status
+
+- `GET /api/vestaboard/current`: attempts live board fetch, falls back to mock safely
+- `POST /api/vestaboard/send`: sends matrix payload server-side with API key
+- `GET /api/vestaboard/connectivity`: checks API token connectivity
+
+No secrets are exposed to client-side code.
