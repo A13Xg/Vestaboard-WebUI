@@ -95,6 +95,26 @@ export const WORKFLOW_INTEGRATIONS: WorkflowIntegrationDefinition[] = [
     availableVariables: ["type", "setup", "punchline"],
     fields: [],
   },
+  {
+    id: "gemma",
+    label: "Gemma AI",
+    description: "Prompt Google Gemma and render the generated response onto the board.",
+    category: "content",
+    priority: "free-api-key",
+    defaultTemplate: "{response}",
+    availableVariables: ["response", "prompt", "model"],
+    fields: [
+      {
+        key: "prompt",
+        label: "Gemma Prompt",
+        placeholder: "Write a short upbeat message about today's weather for the office lobby.",
+        defaultValue: "Write a short upbeat message for the Vestaboard.",
+        helpText: "This prompt is sent to the Gemma API. Keep it specific so the response stays concise.",
+        multiline: true,
+        rows: 5,
+      },
+    ],
+  },
 ];
 
 export function getWorkflowIntegrationDefinition(id: WorkflowDataSourceProviderId) {

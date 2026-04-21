@@ -16,7 +16,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Workflow output template is required" }, { status: 400 });
     }
 
-    const preview = await buildWorkflowPreview(body.message.text, body.dataSource ?? null);
+    const preview = await buildWorkflowPreview(body.message.text, body.dataSource ?? null, {
+      alignment: body.message.alignment,
+    });
     return NextResponse.json<WorkflowPreviewResponse>(preview);
   } catch (err) {
     return unexpectedError("workflows.preview.post", err);

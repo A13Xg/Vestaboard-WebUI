@@ -158,9 +158,12 @@ export async function deleteWorkflow(id: string): Promise<boolean> {
  */
 async function executeWorkflow(workflow: Workflow): Promise<WorkflowRunResult & { renderedText?: string }> {
   try {
-    const preview = await buildWorkflowPreview(workflow.message.text, workflow.dataSource ?? null);
+    const preview = await buildWorkflowPreview(workflow.message.text, workflow.dataSource ?? null, {
+      alignment: workflow.message.alignment,
+    });
     const send = await sendMessageToVestaboard({
       text: preview.renderedText,
+      matrix: preview.renderedMatrix,
       alignment: workflow.message.alignment,
       style: workflow.message.style,
       colorInserts: workflow.message.colorInserts,
@@ -179,8 +182,8 @@ async function executeWorkflow(workflow: Workflow): Promise<WorkflowRunResult & 
       success: send.success,
       message: send.success ? "Message sent" : send.error ?? "Failed to send",
       runAt: new Date().toISOString(),
-      renderedText: preview.renderedText,
-    };
+        renderedText: preview.renderedText,
+      };
   } catch (error) {
     return {
       workflowId: workflow.id,

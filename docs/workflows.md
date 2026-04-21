@@ -45,9 +45,10 @@ interface Workflow {
 3. **Resolve data source** — if a `dataSource` is set, `lib/workflow-integrations.ts` calls the external API.
 4. **Render template** — `{variable}` placeholders in the message text are replaced with resolved values.
 5. **Sanitise** — `boardSafe()` strips non-Vestaboard characters and normalises Unicode.
-6. **Validate** — `validateMessageText()` confirms the final string fits the board and uses only supported characters.
-7. **Send** — `sendMessageToVestaboard()` POSTs the matrix to the Vestaboard RW endpoint.
-8. **Update store** — `lastRunAt`, `nextRunAt`, and `lastExecution` are written back to `data/workflows.json`.
+6. **Wrap for board output** — rendered text is converted into an exact Vestaboard matrix; Gemma responses hyphenate oversized words when they continue onto the next line.
+7. **Validate** — `validateMessageText()` confirms the final rendered output fits the board and uses only supported characters.
+8. **Send** — `sendMessageToVestaboard()` POSTs the exact matrix to the Vestaboard RW endpoint.
+9. **Update store** — `lastRunAt`, `nextRunAt`, and `lastExecution` are written back to `data/workflows.json`.
 
 ## Runner API
 
@@ -106,5 +107,11 @@ Set `CRON_SECRET` in Vercel project environment variables. Vercel Cron Jobs atta
 ## Integration Definitions
 
 Integration metadata (labels, field definitions, default templates, available variables) is declared in `lib/workflow-integration-defs.ts`. The resolver logic lives in `lib/workflow-integrations.ts`.
+
+### Gemma Workflow
+
+The `gemma` provider uses `GEMMA_API_KEY` server-side to call Google's Gemma model through the Gemini API. The workflow stores a user-editable `prompt` in `WorkflowDataSource.config`, resolves the API response into `{response}`, and defaults the output template to `{response}` so the generated message can be sent directly to the board.
+
+When Gemma returns a word that must be split across board rows, the workflow renderer inserts hyphens so the wrapped output stays readable on the Vestaboard.
 
 See [Adding Integrations](adding-integrations.md) to extend the system.

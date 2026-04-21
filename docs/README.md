@@ -22,6 +22,7 @@ Welcome to the Vestaboard WebUI developer documentation.
 | `ACCESS_CODE` | Yes | Login passphrase |
 | `VESTABOARD_API_TOKEN` | Yes | Vestaboard RW API key |
 | `CRON_SECRET` | Optional | Authorization token for workflow scheduler |
+| `GEMMA_API_KEY` | Optional | Google AI Studio API key for Gemma workflows |
 
 ### Key Files
 

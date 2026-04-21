@@ -36,7 +36,7 @@ if errorlevel 1 (
 
 echo.
 echo [4/5] Killing any process on port 3000...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$connections = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if ($connections) { $connections | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; $deadline = (Get-Date).AddSeconds(10); do { $remaining = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue; if (-not $remaining) { if ($connections) { Write-Host 'Port 3000 cleared.' } else { Write-Host 'Port 3000 already free.' }; exit 0 }; Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $deadline); $remaining | Select-Object LocalAddress,LocalPort,State,OwningProcess | Format-Table -AutoSize; Write-Error 'Port 3000 is still in use.'; exit 1"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$connections = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if ($connections) { $connections | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; $deadline = (Get-Date).AddSeconds(10); do { $remaining = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if (-not $remaining) { if ($connections) { Write-Host 'Port 3000 cleared.' } else { Write-Host 'Port 3000 already free.' }; exit 0 }; Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $deadline); $remaining | Select-Object LocalAddress,LocalPort,State,OwningProcess | Format-Table -AutoSize; Write-Error 'Port 3000 is still listening.'; exit 1"
 if errorlevel 1 (
   echo.
   echo Failed to clear port 3000. Stopping.

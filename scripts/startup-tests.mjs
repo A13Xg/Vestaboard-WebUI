@@ -64,10 +64,23 @@ async function main() {
     cronSecret ? "loaded" : "not set (optional)",
   );
 
+  const gemmaApiKey = getVar("GEMMA_API_KEY", parsedEnv);
+  printResult(
+    "Env GEMMA_API_KEY",
+    true,
+    gemmaApiKey ? "loaded" : "not set (optional)",
+  );
+
   const token = getVar("VESTABOARD_API_TOKEN", parsedEnv);
   const tokenOk = token.length >= 16;
   printResult("VESTABOARD_API_TOKEN basic format", tokenOk, `length=${token.length}`);
   if (!tokenOk) failures++;
+
+  if (gemmaApiKey) {
+    const gemmaOk = gemmaApiKey.length >= 16;
+    printResult("GEMMA_API_KEY basic format", gemmaOk, `length=${gemmaApiKey.length}`);
+    if (!gemmaOk) failures++;
+  }
 
   if (tokenOk) {
     try {

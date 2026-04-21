@@ -12,6 +12,7 @@ import {
   Trash2,
   Workflow as WorkflowIcon,
 } from "lucide-react";
+import { BoardPreview } from "@/components/board";
 import { CurrentDisplayCard } from "@/components/dashboard/CurrentDisplayCard";
 import { UpcomingStatsCard } from "@/components/dashboard/UpcomingStatsCard";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@/components/ui";
@@ -411,17 +412,48 @@ export default function WorkflowsPage() {
                     {currentIntegration && currentIntegration.fields.length > 0 && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {currentIntegration.fields.map((field) => (
-                          <Input
-                            key={field.key}
-                            id={`provider-${field.key}`}
-                            label={field.label}
-                            value={form.providerConfig[field.key] ?? ""}
-                            placeholder={field.placeholder}
-                            onChange={(e) => setForm((prev) => ({
-                              ...prev,
-                              providerConfig: { ...prev.providerConfig, [field.key]: e.target.value },
-                            }))}
-                          />
+                          <div key={field.key} className={field.multiline ? "md:col-span-2" : undefined}>
+                            {field.multiline ? (
+                              <div className="flex flex-col gap-1.5 w-full">
+                                <label
+                                  htmlFor={`provider-${field.key}`}
+                                  className="text-xs font-medium text-neutral-400 uppercase tracking-wider"
+                                >
+                                  {field.label}
+                                </label>
+                                <textarea
+                                  id={`provider-${field.key}`}
+                                  rows={field.rows ?? 4}
+                                  value={form.providerConfig[field.key] ?? ""}
+                                  placeholder={field.placeholder}
+                                  onChange={(e) => setForm((prev) => ({
+                                    ...prev,
+                                    providerConfig: { ...prev.providerConfig, [field.key]: e.target.value },
+                                  }))}
+                                  className="min-h-[110px] w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-neutral-950"
+                                />
+                                {field.helpText && (
+                                  <p className="text-xs text-neutral-600">{field.helpText}</p>
+                                )}
+                              </div>
+                            ) : (
+                              <div>
+                                <Input
+                                  id={`provider-${field.key}`}
+                                  label={field.label}
+                                  value={form.providerConfig[field.key] ?? ""}
+                                  placeholder={field.placeholder}
+                                  onChange={(e) => setForm((prev) => ({
+                                    ...prev,
+                                    providerConfig: { ...prev.providerConfig, [field.key]: e.target.value },
+                                  }))}
+                                />
+                                {field.helpText && (
+                                  <p className="text-xs text-neutral-600 mt-1.5">{field.helpText}</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     )}
@@ -564,7 +596,13 @@ export default function WorkflowsPage() {
                 <div className="space-y-3">
                   <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
                     <p className="text-[11px] uppercase tracking-wider text-neutral-500">Rendered Board Output</p>
-                    <p className="text-sm font-mono text-neutral-100 mt-2 break-words">{preview.renderedText}</p>
+                    <p className="text-sm font-mono text-neutral-100 mt-2 break-words whitespace-pre-wrap">{preview.renderedText}</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
+                    <p className="text-[11px] uppercase tracking-wider text-neutral-500">Board Preview</p>
+                    <div className="mt-3">
+                      <BoardPreview matrix={preview.renderedMatrix} />
+                    </div>
                   </div>
                   <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
                     <p className="text-[11px] uppercase tracking-wider text-neutral-500">Resolved Variables</p>

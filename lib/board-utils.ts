@@ -1,6 +1,10 @@
 import type { BoardMatrix } from "@/types";
 import { BOARD_ROWS, BOARD_COLS } from "@/config";
 
+export interface WrapTextOptions {
+  hyphenateOverflowWords?: boolean;
+}
+
 /**
  * Maps printable characters to their Vestaboard numeric character codes.
  * Codes 1–26 = A–Z, digits use 27–36 with '1'..'9' = 27..35 and '0' = 36,
@@ -117,6 +121,79 @@ export function matrixToPlainText(matrix: BoardMatrix): string {
   return rows.join("\n").trim();
 }
 
+export function wrapTextToRows(
+  text: string,
+  cols = BOARD_COLS,
+  options: WrapTextOptions = {},
+): string[] {
+  const { hyphenateOverflowWords = false } = options;
+  const wrappedRows: string[] = [];
+
+  for (const rawLine of text.split(/\n/)) {
+    if (rawLine.length === 0) {
+      wrappedRows.push("");
+      continue;
+    }
+
+    let current = "";
+    const words = rawLine.split(" ").filter((word, index, wordsArray) => word.length > 0 || wordsArray.length === 1);
+
+    for (const word of words) {
+      if (word.length === 0) continue;
+
+      let remaining = word;
+      while (remaining.length > 0) {
+        const separator = current.length === 0 ? "" : " ";
+        const available = cols - current.length - separator.length;
+
+        if (remaining.length <= available) {
+          current += separator + remaining;
+          remaining = "";
+          continue;
+        }
+
+        if (remaining.length <= cols) {
+          if (current.length > 0) {
+            wrappedRows.push(current);
+            current = "";
+            continue;
+          }
+
+          current = remaining;
+          remaining = "";
+          continue;
+        }
+
+        if (available <= 0 || (hyphenateOverflowWords && available <= 1)) {
+          if (current.length > 0) {
+            wrappedRows.push(current);
+            current = "";
+            continue;
+          }
+        }
+
+        const chunkSize = hyphenateOverflowWords
+          ? Math.max(1, (current.length === 0 ? cols : available) - 1)
+          : current.length === 0
+            ? cols
+            : available;
+
+        const chunk = remaining.slice(0, chunkSize);
+        current += separator + chunk + (hyphenateOverflowWords ? "-" : "");
+        remaining = remaining.slice(chunkSize);
+        wrappedRows.push(current);
+        current = "";
+      }
+    }
+
+    if (current.length > 0) {
+      wrappedRows.push(current);
+    }
+  }
+
+  return wrappedRows;
+}
+
 /**
  * Converts a text string into a full board matrix, word-wrapping across rows
  * and applying per-row alignment (left/center/right).
@@ -132,48 +209,10 @@ export function textToMatrix(
   rows = BOARD_ROWS,
   cols = BOARD_COLS,
   alignment: "left" | "center" | "right" = "left",
+  options: WrapTextOptions = {},
 ): BoardMatrix {
   const matrix = emptyMatrix(rows, cols);
-
-  // Collect word-wrapped rows of board-width text
-  const wrappedRows: string[] = [];
-
-  for (const line of text.split(/\n/)) {
-    if (line.length === 0) {
-      wrappedRows.push(""); // preserve explicit blank lines
-      continue;
-    }
-    if (line.length <= cols) {
-      wrappedRows.push(line);
-      continue;
-    }
-
-    // Word-wrap: pack words into rows without splitting mid-word where possible
-    let current = "";
-    for (const word of line.split(" ")) {
-      if (current.length === 0) {
-        // Word wider than the board — hard-break at cols
-        let remaining = word;
-        while (remaining.length > cols) {
-          wrappedRows.push(remaining.slice(0, cols));
-          remaining = remaining.slice(cols);
-        }
-        current = remaining;
-      } else if (current.length + 1 + word.length <= cols) {
-        current += " " + word;
-      } else {
-        wrappedRows.push(current);
-        // New row may also start with an oversized word
-        let remaining = word;
-        while (remaining.length > cols) {
-          wrappedRows.push(remaining.slice(0, cols));
-          remaining = remaining.slice(cols);
-        }
-        current = remaining;
-      }
-    }
-    if (current.length > 0) wrappedRows.push(current);
-  }
+  const wrappedRows = wrapTextToRows(text, cols, options);
 
   // Write each wrapped row into the matrix at the correct column offset
   for (let r = 0; r < Math.min(wrappedRows.length, rows); r++) {

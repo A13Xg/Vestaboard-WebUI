@@ -44,7 +44,7 @@ Open `lib/workflow-integration-defs.ts` and add an entry to the `WORKFLOW_INTEGR
   label: "My Provider",
   description: "Short description shown in the Workflow Studio.",
   category: "utility",      // "finance" | "news" | "content" | "utility" | "system"
-  priority: "public",       // "public" (no API key) | "key-required" | "premium"
+  priority: "public",       // "public" | "free-api-key" | "paid"
   defaultTemplate: "VALUE IS {myVariable}",
   availableVariables: ["myVariable", "otherVar"],
   fields: [
@@ -54,6 +54,8 @@ Open `lib/workflow-integration-defs.ts` and add an entry to the `WORKFLOW_INTEGR
       placeholder: "example value",
       defaultValue: "default",
       helpText: "Optional helper text shown below the input",
+      multiline: false,
+      rows: 4,
     },
   ],
 },
@@ -68,6 +70,8 @@ Open `lib/workflow-integration-defs.ts` and add an entry to the `WORKFLOW_INTEGR
 | `placeholder` | `string` | No | Input placeholder text |
 | `defaultValue` | `string` | No | Pre-filled value |
 | `helpText` | `string` | No | Secondary description below the input |
+| `multiline` | `boolean` | No | Render the field as a textarea instead of a single-line input |
+| `rows` | `number` | No | Default textarea rows when `multiline` is enabled |
 
 ---
 

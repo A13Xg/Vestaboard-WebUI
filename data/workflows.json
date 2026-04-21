@@ -1,4 +1,36 @@
 {
   "version": 1,
-  "workflows": []
+  "workflows": [
+    {
+      "id": "wf-1776738942324-dewetn",
+      "name": "Time",
+      "enabled": true,
+      "message": {
+        "text": "{timezoneLabel} {time} {date}",
+        "alignment": "center",
+        "style": "default",
+        "colorInserts": []
+      },
+      "dataSource": {
+        "providerId": "time",
+        "config": {
+          "timezone": "America/Los_Angeles"
+        }
+      },
+      "schedule": {
+        "type": "daily",
+        "timeHHMM": "09:00"
+      },
+      "createdAt": "2026-04-21T02:35:42.324Z",
+      "updatedAt": "2026-04-21T02:35:45.772Z",
+      "nextRunAt": "2026-04-21T16:00:00.000Z",
+      "lastRunAt": "2026-04-21T02:35:45.772Z",
+      "lastExecution": {
+        "success": true,
+        "executedAt": "2026-04-21T02:35:45.772Z",
+        "renderedText": "LOS ANGELES 19:35:45 04/20/2026",
+        "summary": "Message sent"
+      }
+    }
+  ]
 }

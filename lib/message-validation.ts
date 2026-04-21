@@ -1,5 +1,6 @@
 import type { BoardMatrix } from "@/types";
 import { BOARD_PROFILES, type BoardModel } from "@/lib/board-model";
+import { wrapTextToRows } from "@/lib/board-utils";
 
 export const ALLOWED_MESSAGE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$()-+&=;:'\"%,./?° ";
 
@@ -13,8 +14,7 @@ export interface MessageValidationResult {
 
 export function validateMessageText(text: string, boardModel: BoardModel = "flagship"): MessageValidationResult {
   const profile = BOARD_PROFILES[boardModel];
-  const maxChars = profile.rows * profile.cols;
-  const normalizedText = text.toUpperCase();
+  const normalizedText = text.toUpperCase().replace(/\r?\n/g, "\n");
 
   if (!normalizedText.trim()) {
     return {
@@ -24,16 +24,18 @@ export function validateMessageText(text: string, boardModel: BoardModel = "flag
     };
   }
 
-  if (normalizedText.length > maxChars) {
+  const printableCharCount = normalizedText.replace(/\n/g, "").length;
+  if (printableCharCount > profile.rows * profile.cols) {
     return {
       valid: false,
       normalizedText,
-      error: `Message exceeds ${maxChars} characters for ${profile.label}`,
+      error: `Message exceeds ${profile.rows * profile.cols} characters for ${profile.label}`,
     };
   }
 
   for (let i = 0; i < normalizedText.length; i++) {
     const ch = normalizedText[i];
+    if (ch === "\n") continue;
     if (!ALLOWED_CHAR_SET.has(ch)) {
       return {
         valid: false,
@@ -41,6 +43,15 @@ export function validateMessageText(text: string, boardModel: BoardModel = "flag
         error: `Invalid character '${ch}' at position ${i + 1}`,
       };
     }
+  }
+
+  const wrappedRows = wrapTextToRows(normalizedText, profile.cols);
+  if (wrappedRows.length > profile.rows) {
+    return {
+      valid: false,
+      normalizedText,
+      error: `Message exceeds ${profile.rows} lines for ${profile.label}`,
+    };
   }
 
   return {

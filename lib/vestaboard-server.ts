@@ -157,10 +157,13 @@ export async function getCurrentDisplayLiveOrMock(): Promise<CurrentDisplayRespo
       };
     }
 
+    const normalizedMatrix = normalizeMatrix(matrix);
+
     return {
       message: {
         id: `live-${Date.now()}`,
-        matrix: normalizeMatrix(matrix),
+        matrix: normalizedMatrix,
+        text: matrixToPlainText(normalizedMatrix),
         sentAt: new Date().toISOString(),
         label: "Live board state",
       },

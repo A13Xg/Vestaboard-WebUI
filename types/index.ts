@@ -189,7 +189,8 @@ export type WorkflowDataSourceProviderId =
   | "quote"
   | "exchange-rates"
   | "time"
-  | "joke";
+  | "joke"
+  | "gemma";
 
 export interface WorkflowSchedule {
   type: WorkflowScheduleType;
@@ -226,6 +227,8 @@ export interface WorkflowIntegrationFieldDefinition {
   placeholder?: string;
   defaultValue?: string;
   helpText?: string;
+  multiline?: boolean;
+  rows?: number;
 }
 
 export interface WorkflowIntegrationDefinition {
@@ -293,6 +296,7 @@ export interface WorkflowPreviewRequest {
 
 export interface WorkflowPreviewResponse {
   renderedText: string;
+  renderedMatrix: BoardMatrix;
   variables: Record<string, string>;
   providerLabel?: string;
 }

@@ -8,6 +8,7 @@ export const ROUTES = {
   login: "/login",
   dashboard: "/",
   compose: "/compose",
+  quickSend: "/quick-send",
   workflows: "/workflows",
   settings: "/settings",
 } as const;

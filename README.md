@@ -43,6 +43,7 @@ Windows batch helper (build + start):
 | `ACCESS_CODE` | Yes | Single-user passphrase for the login screen |
 | `VESTABOARD_API_TOKEN` | Yes | Vestaboard RW (read/write) API key |
 | `CRON_SECRET` | Optional | Bearer token for external workflow scheduler calls |
+| `GEMMA_API_KEY` | Optional | Google AI Studio API key for Gemma-powered workflows |
 
 Create `.env.local` from `.env.local.example` and populate all required values before running.
 
@@ -58,6 +59,7 @@ app/
     workflows/page.tsx # Workflow Studio
     settings/page.tsx  # Settings (connectivity, board model, transitions)
   login/               # Login page (access-code entry)
+  quick-send/page.tsx  # /quick-send — minimal mobile-first send flow
   api/
     auth/              # login / logout / session check
     vestaboard/        # current, send, preview, transition, connectivity
@@ -173,6 +175,7 @@ Each workflow can optionally pull live data from a provider and interpolate it i
 | `exchange-rates` | `{base}` `{target}` `{rate}` `{date}` | Frankfurter (free) |
 | `time` | `{time}` `{date}` `{timezone}` `{timezoneLabel}` | Server system clock |
 | `joke` | `{setup}` `{punchline}` `{type}` | Official Joke API (free) |
+| `gemma` | `{response}` `{prompt}` `{model}` | Google Gemma via Gemini API (`GEMMA_API_KEY`) |
 
 ### API Endpoints
 
@@ -218,6 +221,14 @@ Set `CRON_SECRET` in Vercel environment variables and add it to the cron request
 | GET | `/api/vestaboard/connectivity` | Check API token connectivity |
 
 No API keys or secrets are ever sent to the browser.
+
+### Quick Send
+
+`/quick-send` is a stripped-down authenticated mobile page that:
+- shows the current board state
+- exposes a single large **Send Message** CTA
+- previews the draft before sending
+- confirms the send by refetching the current board message and matching it to the just-sent matrix before showing success
 
 ---
 

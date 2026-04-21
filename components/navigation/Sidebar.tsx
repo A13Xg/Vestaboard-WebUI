@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
   PenLine,
+  Smartphone,
   CalendarClock,
   Settings,
   ChevronLeft,
@@ -21,6 +22,7 @@ import { APP_NAME, APP_TAGLINE } from "@/config";
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/compose", label: "Compose", icon: PenLine },
+  { href: "/quick-send", label: "Quick Send", icon: Smartphone },
   { href: "/workflows", label: "Workflows", icon: CalendarClock },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

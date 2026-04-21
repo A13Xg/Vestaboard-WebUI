@@ -1,6 +1,8 @@
 import { validateMessageText } from "@/lib/message-validation";
 import { getWorkflowIntegrationDefinition } from "@/lib/workflow-integration-defs";
-import type { WorkflowDataSource, WorkflowPreviewResponse } from "@/types";
+import { matrixToPlainText, textToMatrix, wrapTextToRows } from "@/lib/board-utils";
+import { BOARD_PROFILES } from "@/lib/board-model";
+import type { TextAlignment, WorkflowDataSource, WorkflowPreviewResponse } from "@/types";
 
 /**
  * Characters not in the Vestaboard character set.
@@ -8,6 +10,8 @@ import type { WorkflowDataSource, WorkflowPreviewResponse } from "@/types";
  */
 
 const BOARD_SAFE_CHAR = /[^A-Z0-9!@#$()\-+&=;:'"%,./?° ]/g;
+const GEMMA_MODEL = "gemma-4-26b-a4b-it";
+const GEMMA_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /**
  * Normalises an arbitrary string to only Vestaboard-printable characters:
@@ -28,6 +32,10 @@ function boardSafe(value: string) {
     .replace(BOARD_SAFE_CHAR, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function getGemmaApiKey() {
+  return process.env.GEMMA_API_KEY?.trim() || "";
 }
 
 /**
@@ -210,6 +218,72 @@ async function resolveJoke() {
   };
 }
 
+async function resolveGemma(config: Record<string, string>) {
+  const apiKey = getGemmaApiKey();
+  if (!apiKey) {
+    throw new Error("GEMMA_API_KEY is not configured");
+  }
+
+  const prompt = config.prompt?.trim();
+  if (!prompt) {
+    throw new Error("Gemma prompt is required");
+  }
+
+  const promptText = [
+    "You are writing a message for a Vestaboard display.",
+    "Reply with plain message text only.",
+    "Do not use markdown, bullets, labels, or quotes unless requested.",
+    "Keep the response concise enough to fit on a 6x22 Vestaboard.",
+    "",
+    prompt,
+  ].join("\n");
+
+  const res = await fetch(`${GEMMA_ENDPOINT}/${GEMMA_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { text: promptText },
+          ],
+        },
+      ],
+    }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const detail = (await res.text()).slice(0, 200);
+    throw new Error(`Gemma request failed (${res.status})${detail ? `: ${detail}` : ""}`);
+  }
+
+  const json = await res.json() as {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{ text?: string }>;
+      };
+    }>;
+  };
+
+  const responseText = json.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text ?? "")
+    .join(" ")
+    .trim();
+
+  if (!responseText) {
+    throw new Error("Gemma returned an empty response");
+  }
+
+  return {
+    response: boardSafe(responseText),
+    prompt: boardSafe(prompt),
+    model: boardSafe(GEMMA_MODEL),
+  };
+}
+
 /**
  * Dispatches to the appropriate integration resolver based on `source.providerId`,
  * returning a flat key→value variables map for template substitution.
@@ -232,6 +306,8 @@ export async function resolveWorkflowDataSource(source: WorkflowDataSource) {
       return resolveTime(source.config);
     case "joke":
       return resolveJoke();
+    case "gemma":
+      return resolveGemma(source.config);
     default:
       throw new Error(`Unsupported workflow data source: ${String((source as WorkflowDataSource).providerId)}`);
   }
@@ -243,17 +319,44 @@ export async function resolveWorkflowDataSource(source: WorkflowDataSource) {
  * Throws if the resolved text is empty or invalid — callers should catch and
  * surface the error to the user or the run-result log.
  */
-export async function buildWorkflowPreview(messageText: string, dataSource?: WorkflowDataSource | null): Promise<WorkflowPreviewResponse> {
+export async function buildWorkflowPreview(
+  messageText: string,
+  dataSource?: WorkflowDataSource | null,
+  options: { alignment?: TextAlignment } = {},
+): Promise<WorkflowPreviewResponse> {
   const definition = dataSource ? getWorkflowIntegrationDefinition(dataSource.providerId) : undefined;
   const variables = dataSource ? await resolveWorkflowDataSource(dataSource) : {};
   const raw = dataSource ? renderTemplate(messageText, variables) : messageText;
   const safe = boardSafe(raw);
-  const validation = validateMessageText(safe, "flagship");
+  const profile = BOARD_PROFILES.flagship;
+  const wrappedRows = wrapTextToRows(safe, profile.cols, {
+    hyphenateOverflowWords: dataSource?.providerId === "gemma",
+  });
+
+  if (wrappedRows.length === 0 || wrappedRows.every((row) => row.trim().length === 0)) {
+    throw new Error("Rendered workflow output is empty");
+  }
+
+  if (wrappedRows.length > profile.rows) {
+    throw new Error(`Rendered workflow output exceeds ${profile.rows} lines for ${profile.label}`);
+  }
+
+  const renderedMatrix = textToMatrix(
+    safe,
+    profile.rows,
+    profile.cols,
+    options.alignment ?? "center",
+    { hyphenateOverflowWords: dataSource?.providerId === "gemma" },
+  );
+  const renderedText = matrixToPlainText(renderedMatrix);
+  const validation = validateMessageText(renderedText, "flagship");
   if (!validation.valid) {
     throw new Error(validation.error ?? "Rendered workflow output is invalid");
   }
+
   return {
     renderedText: validation.normalizedText,
+    renderedMatrix,
     variables,
     providerLabel: definition?.label,
   };

@@ -14,6 +14,7 @@ SESSION_SECRET=<32+ random characters>
 ACCESS_CODE=<your chosen passphrase>
 VESTABOARD_API_TOKEN=<vestaboard rw api key>
 CRON_SECRET=<random secret for workflow scheduling>
+GEMMA_API_KEY=<google ai studio api key for gemma workflows>
 ```
 
 ### Generating Secrets
@@ -54,6 +55,8 @@ Windows batch helper (build + start in one command):
 2. Import the project in [Vercel](https://vercel.com).
 3. Add all environment variables in the Vercel project settings.
 4. Deploy.
+
+If you plan to use the Gemma workflow integration, add `GEMMA_API_KEY` in the same environment-variable set.
 
 ### Cron Jobs (Vercel)
 
@@ -107,6 +110,7 @@ Enable `output: 'standalone'` in `next.config.ts` for this to work.
 - [ ] `SESSION_SECRET` is at least 32 characters of random entropy
 - [ ] `ACCESS_CODE` is strong and not reused elsewhere
 - [ ] `CRON_SECRET` is set and rotated periodically
+- [ ] `GEMMA_API_KEY` is configured anywhere Gemma-backed workflows need to run
 - [ ] HTTPS is enforced in production (Vercel does this automatically)
 - [ ] The `data/` directory is excluded from version control (`.gitignore`)
 - [ ] Environment variables are never committed to the repository

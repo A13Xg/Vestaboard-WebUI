@@ -22,7 +22,12 @@ export async function POST(req: NextRequest) {
     const profile = BOARD_PROFILES[boardModel];
 
     // TODO: Call Vestaboard VBML or encode API to get accurate matrix
-    const matrix = textToMatrix(validation.normalizedText, profile.rows, profile.cols);
+    const matrix = textToMatrix(
+      validation.normalizedText,
+      profile.rows,
+      profile.cols,
+      body.alignment ?? "left",
+    );
 
     return NextResponse.json<PreviewResponse>({
       matrix,
