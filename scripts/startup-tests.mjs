@@ -4,6 +4,7 @@ import path from "node:path";
 const root = process.cwd();
 const envPath = path.join(root, ".env.local");
 const vercelPath = path.join(root, "vercel.json");
+const GEMMA_MODEL = "gemma-3-4b-it";
 
 function parseEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return {};
@@ -35,6 +36,46 @@ async function testVestaboardConnectivity(token) {
     cache: "no-store",
   });
   return res.status;
+}
+
+async function testGemmaConnectivity(apiKey) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMMA_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [{ text: "Reply with OK only." }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0,
+        maxOutputTokens: 8,
+      },
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!res.ok) {
+    const rawText = await res.text();
+    let detail = rawText.slice(0, 200);
+    try {
+      const json = JSON.parse(rawText);
+      detail = json?.error?.message || detail;
+    } catch {}
+    throw new Error(detail || `status=${res.status}`);
+  }
+
+  const json = await res.json();
+  const responseText = json?.candidates?.[0]?.content?.parts?.map((part) => part?.text || "").join(" ").trim();
+  if (!responseText) {
+    throw new Error("Gemma returned an empty response");
+  }
+
+  return responseText;
 }
 
 function printResult(name, ok, detail) {
@@ -80,6 +121,16 @@ async function main() {
     const gemmaOk = gemmaApiKey.length >= 16;
     printResult("GEMMA_API_KEY basic format", gemmaOk, `length=${gemmaApiKey.length}`);
     if (!gemmaOk) failures++;
+
+    if (gemmaOk) {
+      try {
+        const responseText = await testGemmaConnectivity(gemmaApiKey);
+        printResult("Gemma API auth", true, `model=${GEMMA_MODEL}; reply=${JSON.stringify(responseText)}`);
+      } catch (error) {
+        printResult("Gemma API auth", false, error.message);
+        failures++;
+      }
+    }
   }
 
   if (tokenOk) {

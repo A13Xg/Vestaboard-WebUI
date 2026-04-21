@@ -28,6 +28,7 @@ export const API_ROUTES = {
   workflows: "/api/workflows",
   workflowsRunner: "/api/workflows/runner",
   workflowsPreview: "/api/workflows/preview",
+  workflowsGemmaConnectivity: "/api/workflows/gemma-connectivity",
 } as const;
 
 export const BOARD_BG = "#1a1a1a";

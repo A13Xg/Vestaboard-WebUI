@@ -7,11 +7,13 @@ import { BoardGrid } from "./BoardGrid";
 import type { BoardMatrix } from "@/types";
 import type { TransitionStyle, TransitionSpeed } from "@/types";
 import { useBoardModel } from "@/hooks/use-board-model";
+import { BOARD_PROFILES, type BoardModel } from "@/lib/board-model";
 
 interface BoardPreviewProps {
   matrix?: BoardMatrix;
   loading?: boolean;
   className?: string;
+  boardModel?: BoardModel;
   /** Override cell size in px — auto-calculated from container if omitted */
   cellSize?: number;
   /** Vestaboard transition style to visualise */
@@ -37,10 +39,11 @@ function exitDuration(speed: TransitionSpeed | undefined): number {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function BoardPreview({ matrix, loading, className, cellSize: propCellSize, transition, transitionSpeed, animatePreview }: BoardPreviewProps) {
+export function BoardPreview({ matrix, loading, className, boardModel, cellSize: propCellSize, transition, transitionSpeed, animatePreview }: BoardPreviewProps) {
   const { profile } = useBoardModel();
-  const rows = profile.rows;
-  const cols = profile.cols;
+  const resolvedProfile = boardModel ? BOARD_PROFILES[boardModel] : profile;
+  const rows = resolvedProfile.rows;
+  const cols = resolvedProfile.cols;
   const containerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(propCellSize ?? 14);
   const [animationSeed, setAnimationSeed] = useState(0);

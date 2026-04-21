@@ -295,10 +295,18 @@ export interface WorkflowPreviewRequest {
 }
 
 export interface WorkflowPreviewResponse {
+  boardModel: "flagship" | "note";
   renderedText: string;
   renderedMatrix: BoardMatrix;
   variables: Record<string, string>;
   providerLabel?: string;
+}
+
+export interface GemmaConnectivityResponse {
+  connected: boolean;
+  reason: string | null;
+  statusCode: number;
+  model: string;
 }
 
 export interface WorkflowFile {

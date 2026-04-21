@@ -15,6 +15,7 @@ import type {
   WorkflowUpdateRequest,
   WorkflowPreviewRequest,
   WorkflowPreviewResponse,
+  GemmaConnectivityResponse,
   TransitionResponse,
   SetTransitionRequest,
   SessionData,
@@ -157,6 +158,9 @@ export const workflowApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  gemmaConnectivity: () =>
+    request<GemmaConnectivityResponse>(API_ROUTES.workflowsGemmaConnectivity),
 };
 
 export const presetApi = {

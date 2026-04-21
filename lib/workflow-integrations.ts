@@ -1,56 +1,273 @@
 import { validateMessageText } from "@/lib/message-validation";
 import { getWorkflowIntegrationDefinition } from "@/lib/workflow-integration-defs";
-import { matrixToPlainText, textToMatrix, wrapTextToRows } from "@/lib/board-utils";
-import { BOARD_PROFILES } from "@/lib/board-model";
+import { BOARD_COLOR_TOKENS, directCodesToMatrix, fitTextToBoard, matrixToPlainText, matrixToSequentialTokens, parseSequentialBoardTokens, sanitizeBoardText } from "@/lib/board-utils";
+import { BOARD_PROFILES, type BoardModel } from "@/lib/board-model";
+import { GEMMA_MODEL, generateGemmaText } from "@/lib/gemma-server";
 import type { TextAlignment, WorkflowDataSource, WorkflowPreviewResponse } from "@/types";
 
-/**
- * Characters not in the Vestaboard character set.
- * Anything not matching the allowed set is replaced with a space in boardSafe().
- */
+type GemmaScenario = "word" | "phrase" | "pattern";
+type GemmaPatternType = "flag" | "zigzag" | "checker" | "stripes" | "diagonal";
 
-const BOARD_SAFE_CHAR = /[^A-Z0-9!@#$()\-+&=;:'"%,./?° ]/g;
-const GEMMA_MODEL = "gemma-4-26b-a4b-it";
-const GEMMA_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMMA_NOTE_ROWS = BOARD_PROFILES.note.rows;
+const GEMMA_NOTE_COLS = BOARD_PROFILES.note.cols;
+const GEMMA_NOTE_CELLS = GEMMA_NOTE_ROWS * GEMMA_NOTE_COLS;
+const PROMPT_COLOR_MAP: Record<string, keyof typeof BOARD_COLOR_TOKENS> = {
+  red: "R",
+  orange: "O",
+  yellow: "Y",
+  green: "G",
+  blue: "B",
+  purple: "P",
+  violet: "P",
+  white: "W",
+};
+const GEMMA_WORD_BANK = [
+  { word: "RESILIENCE", definition: "BOUNCING BACK", synonyms: "GRIT,SPIRIT" },
+  { word: "CLARITY", definition: "CLEAR THINKING", synonyms: "FOCUS,ORDER" },
+  { word: "CANDOR", definition: "HONEST SPEECH", synonyms: "FRANKNESS,TRUTH" },
+  { word: "WONDER", definition: "AWE AT BEAUTY", synonyms: "AWE,AMAZEMENT" },
+  { word: "STEADFAST", definition: "FIRMLY LOYAL", synonyms: "LOYAL,RESOLUTE" },
+  { word: "SPARK", definition: "SMALL LIVE ENERGY", synonyms: "GLINT,FLASH" },
+  { word: "KINSHIP", definition: "CLOSE HUMAN BOND", synonyms: "UNITY,CLAN" },
+  { word: "LUCID", definition: "EASY TO UNDERSTAND", synonyms: "CLEAR,SHARP" },
+];
 
-/**
- * Normalises an arbitrary string to only Vestaboard-printable characters:
- * - Collapses smart quotes, curly quotes, and backticks to ASCII equivalents
- * - Replaces en-dashes and em-dashes with hyphens
- * - Strips unsupported characters via BOARD_SAFE_CHAR
- * - Uppercases all letters (the board only supports uppercase)
- * - Collapses multiple spaces to a single space
- */
-function boardSafe(value: string) {
-  return value
-    .replace(/\r?\n/g, " ")
-    .replace(/[’‘`]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[–—]/g, "-")
-    .replace(/\s+/g, " ")
-    .toUpperCase()
-    .replace(BOARD_SAFE_CHAR, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function buildGemmaWordPrompt(userPrompt: string) {
+  return [
+    "You are generating content for a 3x15 Vestaboard Note.",
+    "Return ONLY one line in the format WORD||DETAIL.",
+    "WORD must be a single strong word and should fit within 15 characters.",
+    "DETAIL must be short plain text that fits within 30 characters.",
+    "If the user asks for synonyms, use 1 to 3 common synonyms in DETAIL.",
+    "Do not use quotes, bullet points, explanations, or labels.",
+    "",
+    `USER REQUEST: ${userPrompt}`,
+  ].join("\n");
 }
 
-function getGemmaApiKey() {
-  return process.env.GEMMA_API_KEY?.trim() || "";
+function buildGemmaPhrasePrompt(userPrompt: string) {
+  return [
+    "You are generating content for a 3x15 Vestaboard Note.",
+    "Return ONLY a short plain-text phrase.",
+    "No quotes, no attribution, no markdown, no labels, no color tokens.",
+    "Keep it concise, readable, and suitable for a 45-cell display.",
+    "",
+    `USER REQUEST: ${userPrompt}`,
+  ].join("\n");
 }
 
-/**
- * Substitutes {variableName} placeholders in a template string with resolved values.
- * Unknown variable names resolve to empty string rather than the raw placeholder.
- */
+function buildGemmaShortenPrompt(userPrompt: string, contentText: string) {
+  return [
+    "Rewrite the content so it fits a 3x15 Vestaboard Note.",
+    "Return plain text only.",
+    "Keep the meaning, but shorten aggressively.",
+    "No quotes, no attribution, no labels, no explanations.",
+    "",
+    `USER REQUEST: ${userPrompt}`,
+    `CONTENT TO SHORTEN: ${contentText}`,
+  ].join("\n");
+}
+
+function buildGemmaPatternPalettePrompt(userPrompt: string) {
+  return [
+    "Pick a small color palette for a Vestaboard Note pattern.",
+    "Return ONLY 2 or 3 letters separated by commas.",
+    "Allowed letters: R,O,Y,G,B,P,W",
+    "Do not return words or explanations.",
+    "",
+    `USER REQUEST: ${userPrompt}`,
+  ].join("\n");
+}
+
+function buildGemmaWordRepairPrompt(userPrompt: string, rawResponse: string) {
+  return [
+    "Your previous word-card response was invalid because it did not clearly provide both the word and the short detail.",
+    "Return ONLY one line in the format WORD||DETAIL.",
+    "WORD must be a single word that fits within 15 characters.",
+    "DETAIL must be short plain text that fits within 30 characters.",
+    "Do not stop after the word.",
+    "Do not use labels, quotes, or explanations.",
+    "",
+    `USER REQUEST: ${userPrompt}`,
+    `PREVIOUS RESPONSE: ${rawResponse}`,
+  ].join("\n");
+}
+
 function renderTemplate(template: string, variables: Record<string, string>) {
   return template.replace(/\{([^}]+)\}/g, (_, key: string) => variables[key.trim()] ?? "");
 }
 
-/**
- * Maps WMO weather interpretation codes to human-readable condition strings
- * and a single-character board icon symbol.
- * https://open-meteo.com/en/docs#weathervariables
- */
+function formatGemmaDebugResponse(responseText: string) {
+  return JSON.stringify(responseText);
+}
+
+function logGemmaStage(stage: string, payload: Record<string, unknown>) {
+  try {
+    console.info(`[gemma.${stage}]`, JSON.stringify(payload));
+  } catch {
+    console.info(`[gemma.${stage}]`, payload);
+  }
+}
+
+function sanitizeGemmaPlainText(rawResponse: string) {
+  return sanitizeBoardText(rawResponse, {
+    preserveNewlines: false,
+    collapseWhitespace: true,
+    trim: true,
+  });
+}
+
+function classifyGemmaScenario(prompt: string): GemmaScenario {
+  if (/\b(word(?:\s+of\s+the\s+day)?|definition|define|synonym|synonyms|vocabulary)\b/i.test(prompt)) {
+    return "word";
+  }
+
+  if (/\b(pattern|visual|flag|zig[\s-]*zag|checker|checkerboard|stripe|stripes|diagonal|geometric|color|colour|ascii|art)\b/i.test(prompt)) {
+    return "pattern";
+  }
+
+  return "phrase";
+}
+
+function parseGemmaWordEntry(rawResponse: string) {
+  const normalized = rawResponse.replace(/\r\n?/g, "\n").trim();
+  const line = normalized.split("\n").find((entry) => entry.trim().length > 0) ?? "";
+  const [rawWord, ...rawDetailParts] = line.split("||");
+  const sanitizedLine = sanitizeGemmaPlainText(line);
+  const delimiterParts = sanitizedLine.split(/\s+-\s+|\s+:\s+/);
+  const wordAndRestParts = sanitizedLine.split(/\s+/);
+  const fallbackWord = delimiterParts[0] || wordAndRestParts[0] || "";
+  const fallbackDetail = delimiterParts.length > 1
+    ? delimiterParts.slice(1).join(" ")
+    : wordAndRestParts.slice(1).join(" ");
+  const word = sanitizeGemmaPlainText(rawWord || fallbackWord).slice(0, GEMMA_NOTE_COLS);
+  const detail = sanitizeGemmaPlainText(rawDetailParts.join("||") || fallbackDetail);
+
+  return { word, detail };
+}
+
+function pickPatternType(prompt: string): GemmaPatternType {
+  if (/\bflag\b/i.test(prompt)) return "flag";
+  if (/\bzig[\s-]*zag\b/i.test(prompt)) return "zigzag";
+  if (/\bchecker|checkerboard\b/i.test(prompt)) return "checker";
+  if (/\bstripe|stripes\b/i.test(prompt)) return "stripes";
+  return "diagonal";
+}
+
+function extractPaletteFromPrompt(prompt: string) {
+  const matches = Array.from(prompt.toLowerCase().matchAll(/\b(red|orange|yellow|green|blue|purple|violet|white)\b/g));
+  return Array.from(new Set(matches.map((match) => PROMPT_COLOR_MAP[match[1]]))).filter(Boolean).slice(0, 3);
+}
+
+function parsePaletteResponse(rawResponse: string) {
+  return Array.from(new Set((rawResponse.toUpperCase().match(/[ROYGBPW]/g) ?? []).filter((token) => BOARD_COLOR_TOKENS[token] !== undefined))).slice(0, 3);
+}
+
+function selectGemmaWordEntry(prompt: string) {
+  const now = new Date();
+  const startOfYear = Date.UTC(now.getUTCFullYear(), 0, 0);
+  const dayOfYear = Math.floor((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - startOfYear) / 86400000);
+  const promptHash = Array.from(prompt.toUpperCase()).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const entry = GEMMA_WORD_BANK[(dayOfYear + promptHash) % GEMMA_WORD_BANK.length];
+  const wantsSynonyms = /\bsynonym/i.test(prompt);
+
+  return {
+    word: entry.word,
+    detail: wantsSynonyms ? entry.synonyms : entry.definition,
+  };
+}
+
+async function chooseGemmaPatternPalette(prompt: string) {
+  const explicitPalette = extractPaletteFromPrompt(prompt);
+  if (explicitPalette.length >= 2) {
+    return explicitPalette;
+  }
+
+  const rawResponse = await generateGemmaText(buildGemmaPatternPalettePrompt(prompt), {
+    generationConfig: {
+      temperature: 0,
+      maxOutputTokens: 12,
+    },
+  });
+  const palette = parsePaletteResponse(rawResponse);
+  return palette.length >= 2 ? palette : ["R", "W", "B"];
+}
+
+function buildPatternCodes(patternType: GemmaPatternType, palette: string[]) {
+  const resolvedPalette = palette
+    .map((token) => BOARD_COLOR_TOKENS[token])
+    .filter((code): code is number => code !== undefined);
+  const usablePalette = resolvedPalette.length > 0 ? resolvedPalette : [BOARD_COLOR_TOKENS.B, BOARD_COLOR_TOKENS.W];
+  const codes: number[] = [];
+
+  for (let row = 0; row < GEMMA_NOTE_ROWS; row++) {
+    for (let col = 0; col < GEMMA_NOTE_COLS; col++) {
+      let paletteIndex = 0;
+
+      switch (patternType) {
+        case "flag":
+          paletteIndex = row % usablePalette.length;
+          break;
+        case "zigzag":
+          paletteIndex = (col + (row % usablePalette.length)) % usablePalette.length;
+          break;
+        case "checker":
+          paletteIndex = (row + col) % usablePalette.length;
+          break;
+        case "stripes":
+          paletteIndex = Math.floor((col * usablePalette.length) / GEMMA_NOTE_COLS) % usablePalette.length;
+          break;
+        case "diagonal":
+        default:
+          paletteIndex = (row + col) % usablePalette.length;
+          break;
+      }
+
+      codes.push(usablePalette[paletteIndex]);
+    }
+  }
+
+  return codes;
+}
+
+async function shortenGemmaText(prompt: string, contentText: string) {
+  const response = await generateGemmaText(buildGemmaShortenPrompt(prompt, contentText), {
+    generationConfig: {
+      temperature: 0,
+      maxOutputTokens: 64,
+    },
+  });
+  return sanitizeGemmaPlainText(response);
+}
+
+async function fitGemmaTextToNote(prompt: string, initialText: string) {
+  let contentText = sanitizeGemmaPlainText(initialText);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const fitted = fitTextToBoard(contentText, "note", { alignment: "center" });
+    if (!fitted.truncated) {
+      return { contentText, fitted };
+    }
+
+    logGemmaStage("shorten-request", {
+      prompt,
+      attempt,
+      contentText,
+      wrappedRows: fitted.wrappedRows,
+    });
+
+    const shortened = await shortenGemmaText(prompt, contentText);
+    if (!shortened || shortened === contentText) {
+      break;
+    }
+
+    contentText = shortened;
+  }
+
+  const fitted = fitTextToBoard(contentText, "note", { alignment: "center" });
+  return { contentText, fitted };
+}
+
 function weatherCodeToLabel(code: number) {
   const map: Record<number, { condition: string; icon: string }> = {
     0: { condition: "CLEAR", icon: "°" },
@@ -68,7 +285,6 @@ function weatherCodeToLabel(code: number) {
   return map[code] ?? { condition: "UNKNOWN", icon: "?" };
 }
 
-/** Geocodes the location name via Open-Meteo, then fetches current weather. Returns board-safe template variables. */
 async function resolveWeather(config: Record<string, string>) {
   const location = config.location?.trim() || "Los Angeles";
   const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1`, { cache: "no-store" });
@@ -89,16 +305,15 @@ async function resolveWeather(config: Record<string, string>) {
   const fahrenheit = Math.round((celsius * 9) / 5 + 32);
 
   return {
-    location: boardSafe(match.country ? `${match.name} ${match.country}` : match.name),
+    location: sanitizeBoardText(match.country ? `${match.name} ${match.country}` : match.name),
     tempDeg: String(celsius),
     tempDegF: String(fahrenheit),
-    condition: boardSafe(weatherInfo.condition),
+    condition: sanitizeBoardText(weatherInfo.condition),
     conditionIconSymbol: weatherInfo.icon,
     windKph: String(Math.round(current.wind_speed_10m ?? 0)),
   };
 }
 
-/** Fetches current price and 24 h change from CoinGecko for the given asset/currency pair. */
 async function resolveCrypto(config: Record<string, string>) {
   const assetId = (config.assetId || "bitcoin").trim().toLowerCase();
   const currency = (config.currency || "usd").trim().toLowerCase();
@@ -108,18 +323,14 @@ async function resolveCrypto(config: Record<string, string>) {
   const entry = json[assetId];
   if (!entry) throw new Error(`No crypto data returned for ${assetId}`);
   return {
-    assetName: boardSafe(assetId.replace(/-/g, " ")),
-    assetId: boardSafe(assetId),
-    currency: boardSafe(currency),
+    assetName: sanitizeBoardText(assetId.replace(/-/g, " ")),
+    assetId: sanitizeBoardText(assetId),
+    currency: sanitizeBoardText(currency),
     price: String(entry[currency] ?? "N/A"),
     change24hPct: String(Math.round((entry[`${currency}_24h_change`] ?? 0) * 10) / 10),
   };
 }
 
-/**
- * Fetches a CSV stock quote from Stooq. The CSV header row is parsed dynamically
- * so new Stooq columns are handled gracefully without code changes.
- */
 async function resolveStocks(config: Record<string, string>) {
   const symbol = (config.symbol || "aapl.us").trim().toLowerCase();
   const res = await fetch(`https://stooq.com/q/l/?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcvn&e=csv`, { cache: "no-store" });
@@ -131,18 +342,17 @@ async function resolveStocks(config: Record<string, string>) {
   const values = lines[1].split(",");
   const map = Object.fromEntries(header.map((key, idx) => [key.trim().toLowerCase(), values[idx]?.trim() ?? ""]));
   return {
-    symbol: boardSafe(map.symbol || symbol.toUpperCase()),
-    date: boardSafe(map.date || ""),
-    time: boardSafe(map.time || ""),
-    open: boardSafe(map.open || ""),
-    high: boardSafe(map.high || ""),
-    low: boardSafe(map.low || ""),
-    close: boardSafe(map.close || ""),
-    volume: boardSafe(map.volume || ""),
+    symbol: sanitizeBoardText(map.symbol || symbol.toUpperCase()),
+    date: sanitizeBoardText(map.date || ""),
+    time: sanitizeBoardText(map.time || ""),
+    open: sanitizeBoardText(map.open || ""),
+    high: sanitizeBoardText(map.high || ""),
+    low: sanitizeBoardText(map.low || ""),
+    close: sanitizeBoardText(map.close || ""),
+    volume: sanitizeBoardText(map.volume || ""),
   };
 }
 
-/** Fetches the top Hacker News Algolia result matching the given query. */
 async function resolveNews(config: Record<string, string>) {
   const query = config.query?.trim() || "technology";
   const res = await fetch(`https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}&hitsPerPage=1`, { cache: "no-store" });
@@ -151,11 +361,11 @@ async function resolveNews(config: Record<string, string>) {
   const hit = json.hits?.[0];
   if (!hit) throw new Error(`No news results for ${query}`);
   return {
-    query: boardSafe(query),
-    headline: boardSafe(hit.title || hit.story_title || "NO HEADLINE"),
-    author: boardSafe(hit.author || "UNKNOWN"),
+    query: sanitizeBoardText(query),
+    headline: sanitizeBoardText(hit.title || hit.story_title || "NO HEADLINE"),
+    author: sanitizeBoardText(hit.author || "UNKNOWN"),
     points: String(hit.points ?? 0),
-    url: boardSafe(hit.url || hit.story_url || ""),
+    url: sanitizeBoardText(hit.url || hit.story_url || ""),
   };
 }
 
@@ -164,8 +374,8 @@ async function resolveQuote() {
   if (!res.ok) throw new Error("Quote lookup failed");
   const json = await res.json() as { quote?: string; author?: string };
   return {
-    quote: boardSafe(json.quote || ""),
-    author: boardSafe(json.author || "UNKNOWN"),
+    quote: sanitizeBoardText(json.quote || ""),
+    author: sanitizeBoardText(json.author || "UNKNOWN"),
   };
 }
 
@@ -176,10 +386,10 @@ async function resolveExchangeRates(config: Record<string, string>) {
   if (!res.ok) throw new Error("Exchange rate lookup failed");
   const json = await res.json() as { amount?: number; base?: string; date?: string; rates?: Record<string, number> };
   return {
-    base: boardSafe(json.base || base),
-    target: boardSafe(target),
+    base: sanitizeBoardText(json.base || base),
+    target: sanitizeBoardText(target),
     rate: String(json.rates?.[target] ?? "N/A"),
-    date: boardSafe(json.date || ""),
+    date: sanitizeBoardText(json.date || ""),
   };
 }
 
@@ -200,10 +410,10 @@ async function resolveTime(config: Record<string, string>) {
     day: "2-digit",
   }).format(now);
   return {
-    timezone: boardSafe(timezone),
-    timezoneLabel: boardSafe(timezone.split("/").pop()?.replace(/_/g, " ") || timezone),
-    time: boardSafe(time),
-    date: boardSafe(date),
+    timezone: sanitizeBoardText(timezone),
+    timezoneLabel: sanitizeBoardText(timezone.split("/").pop()?.replace(/_/g, " ") || timezone),
+    time: sanitizeBoardText(time),
+    date: sanitizeBoardText(date),
   };
 }
 
@@ -212,82 +422,98 @@ async function resolveJoke() {
   if (!res.ok) throw new Error("Joke lookup failed");
   const json = await res.json() as { type?: string; setup?: string; punchline?: string };
   return {
-    type: boardSafe(json.type || "GENERAL"),
-    setup: boardSafe(json.setup || ""),
-    punchline: boardSafe(json.punchline || ""),
+    type: sanitizeBoardText(json.type || "GENERAL"),
+    setup: sanitizeBoardText(json.setup || ""),
+    punchline: sanitizeBoardText(json.punchline || ""),
   };
 }
 
 async function resolveGemma(config: Record<string, string>) {
-  const apiKey = getGemmaApiKey();
-  if (!apiKey) {
-    throw new Error("GEMMA_API_KEY is not configured");
-  }
-
   const prompt = config.prompt?.trim();
   if (!prompt) {
     throw new Error("Gemma prompt is required");
   }
+  const scenario = classifyGemmaScenario(prompt);
+  logGemmaStage("scenario", { prompt, scenario, model: GEMMA_MODEL });
 
-  const promptText = [
-    "You are writing a message for a Vestaboard display.",
-    "Reply with plain message text only.",
-    "Do not use markdown, bullets, labels, or quotes unless requested.",
-    "Keep the response concise enough to fit on a 6x22 Vestaboard.",
-    "",
-    prompt,
-  ].join("\n");
+  if (scenario === "pattern") {
+    const patternType = pickPatternType(prompt);
+    const palette = await chooseGemmaPatternPalette(prompt);
+    const renderedMatrix = directCodesToMatrix(buildPatternCodes(patternType, palette), GEMMA_NOTE_ROWS, GEMMA_NOTE_COLS);
+    const response = matrixToSequentialTokens(renderedMatrix);
 
-  const res = await fetch(`${GEMMA_ENDPOINT}/${GEMMA_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+    logGemmaStage("compose", {
+      scenario,
+      patternType,
+      palette,
+      response,
+      cellCount: parseSequentialBoardTokens(response).codes.length,
+    });
+
+    return {
+      response,
+      prompt: sanitizeBoardText(prompt),
+      model: sanitizeBoardText(GEMMA_MODEL),
+      scenario: sanitizeBoardText(scenario),
+      content: sanitizeBoardText(`${patternType} ${palette.join(" ")}`),
+    };
+  }
+
+  if (scenario === "word") {
+    const { word, detail } = selectGemmaWordEntry(prompt);
+    const fitted = fitTextToBoard(`${word}\n${detail}`, "note", { alignment: "center" });
+    const response = matrixToSequentialTokens(fitted.matrix);
+
+    logGemmaStage("content", { scenario, word, detail, source: "word-bank" });
+    logGemmaStage("compose", {
+      scenario,
+      word,
+      detail,
+      wrappedRows: fitted.wrappedRows,
+      response,
+    });
+
+    return {
+      response,
+      prompt: sanitizeBoardText(prompt),
+      model: sanitizeBoardText(GEMMA_MODEL),
+      scenario: sanitizeBoardText(scenario),
+      content: sanitizeBoardText(`${word} ${detail}`),
+    };
+  }
+
+  const contentPrompt = buildGemmaPhrasePrompt(prompt);
+  const rawContent = await generateGemmaText(contentPrompt, {
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 80,
     },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: promptText },
-          ],
-        },
-      ],
-    }),
-    cache: "no-store",
+  });
+  logGemmaStage("content", { scenario, rawContent });
+
+  const initialContent = sanitizeGemmaPlainText(rawContent);
+  if (!initialContent) {
+    throw new Error(`Gemma phrase pass returned empty output. Raw response: ${formatGemmaDebugResponse(rawContent)}`);
+  }
+
+  const { contentText, fitted } = await fitGemmaTextToNote(prompt, initialContent);
+  const response = matrixToSequentialTokens(fitted.matrix);
+  logGemmaStage("compose", {
+    scenario,
+    contentText,
+    wrappedRows: fitted.wrappedRows,
+    response,
   });
 
-  if (!res.ok) {
-    const detail = (await res.text()).slice(0, 200);
-    throw new Error(`Gemma request failed (${res.status})${detail ? `: ${detail}` : ""}`);
-  }
-
-  const json = await res.json() as {
-    candidates?: Array<{
-      content?: {
-        parts?: Array<{ text?: string }>;
-      };
-    }>;
-  };
-
-  const responseText = json.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text ?? "")
-    .join(" ")
-    .trim();
-
-  if (!responseText) {
-    throw new Error("Gemma returned an empty response");
-  }
-
   return {
-    response: boardSafe(responseText),
-    prompt: boardSafe(prompt),
-    model: boardSafe(GEMMA_MODEL),
+    response,
+    prompt: sanitizeBoardText(prompt),
+    model: sanitizeBoardText(GEMMA_MODEL),
+    scenario: sanitizeBoardText(scenario),
+    content: contentText,
   };
 }
 
-/**
- * Dispatches to the appropriate integration resolver based on `source.providerId`,
- * returning a flat key→value variables map for template substitution.
- */
 export async function resolveWorkflowDataSource(source: WorkflowDataSource) {
   switch (source.providerId) {
     case "weather":
@@ -313,12 +539,54 @@ export async function resolveWorkflowDataSource(source: WorkflowDataSource) {
   }
 }
 
-/**
- * Resolves the data source, renders the message template, strips unsupported
- * characters, and validates the final text against the board character set.
- * Throws if the resolved text is empty or invalid — callers should catch and
- * surface the error to the user or the run-result log.
- */
+function buildStandardWorkflowPreview(
+  messageText: string,
+  variables: Record<string, string>,
+  providerId: WorkflowDataSource["providerId"] | undefined,
+  alignment: TextAlignment | undefined,
+) {
+  const raw = renderTemplate(messageText, variables);
+  const formatted = fitTextToBoard(raw, "flagship", {
+    alignment: alignment ?? "center",
+    hyphenateOverflowWords: providerId === "gemma",
+  });
+
+  if (!formatted.renderedText.trim()) {
+    throw new Error("Rendered workflow output is empty");
+  }
+
+  const validation = validateMessageText(formatted.renderedText, "flagship");
+  if (!validation.valid) {
+    throw new Error(validation.error ?? "Rendered workflow output is invalid");
+  }
+
+  return {
+    boardModel: "flagship" as BoardModel,
+    renderedMatrix: formatted.matrix,
+    renderedText: validation.normalizedText,
+  };
+}
+
+function buildGemmaWorkflowPreview(variables: Record<string, string>) {
+  const profile = BOARD_PROFILES.note;
+  const directBoardText = variables.response ?? "";
+  const parsed = parseSequentialBoardTokens(directBoardText);
+  if (parsed.codes.length !== profile.rows * profile.cols) {
+    throw new Error(
+      `Gemma response must contain exactly ${profile.rows * profile.cols} board cells. Raw response: ${formatGemmaDebugResponse(directBoardText)}`,
+    );
+  }
+
+  const renderedMatrix = directCodesToMatrix(parsed.codes, profile.rows, profile.cols);
+  const renderedText = matrixToPlainText(renderedMatrix) || variables.content || parsed.normalized;
+
+  return {
+    boardModel: "note" as BoardModel,
+    renderedMatrix,
+    renderedText,
+  };
+}
+
 export async function buildWorkflowPreview(
   messageText: string,
   dataSource?: WorkflowDataSource | null,
@@ -326,37 +594,19 @@ export async function buildWorkflowPreview(
 ): Promise<WorkflowPreviewResponse> {
   const definition = dataSource ? getWorkflowIntegrationDefinition(dataSource.providerId) : undefined;
   const variables = dataSource ? await resolveWorkflowDataSource(dataSource) : {};
-  const raw = dataSource ? renderTemplate(messageText, variables) : messageText;
-  const safe = boardSafe(raw);
-  const profile = BOARD_PROFILES.flagship;
-  const wrappedRows = wrapTextToRows(safe, profile.cols, {
-    hyphenateOverflowWords: dataSource?.providerId === "gemma",
-  });
-
-  if (wrappedRows.length === 0 || wrappedRows.every((row) => row.trim().length === 0)) {
-    throw new Error("Rendered workflow output is empty");
-  }
-
-  if (wrappedRows.length > profile.rows) {
-    throw new Error(`Rendered workflow output exceeds ${profile.rows} lines for ${profile.label}`);
-  }
-
-  const renderedMatrix = textToMatrix(
-    safe,
-    profile.rows,
-    profile.cols,
-    options.alignment ?? "center",
-    { hyphenateOverflowWords: dataSource?.providerId === "gemma" },
-  );
-  const renderedText = matrixToPlainText(renderedMatrix);
-  const validation = validateMessageText(renderedText, "flagship");
-  if (!validation.valid) {
-    throw new Error(validation.error ?? "Rendered workflow output is invalid");
-  }
+  const preview = dataSource?.providerId === "gemma"
+    ? buildGemmaWorkflowPreview(variables)
+    : buildStandardWorkflowPreview(
+        dataSource ? messageText : sanitizeBoardText(messageText, { preserveNewlines: true }),
+        variables,
+        dataSource?.providerId,
+        options.alignment,
+      );
 
   return {
-    renderedText: validation.normalizedText,
-    renderedMatrix,
+    boardModel: preview.boardModel,
+    renderedText: preview.renderedText,
+    renderedMatrix: preview.renderedMatrix,
     variables,
     providerLabel: definition?.label,
   };

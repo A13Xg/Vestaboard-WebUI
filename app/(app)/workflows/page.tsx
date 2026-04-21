@@ -7,6 +7,7 @@ import {
   CalendarClock,
   Play,
   Plus,
+  RefreshCw,
   Save,
   Sparkles,
   Trash2,
@@ -18,6 +19,8 @@ import { UpcomingStatsCard } from "@/components/dashboard/UpcomingStatsCard";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@/components/ui";
 import { useBoardState } from "@/hooks/use-board-state";
 import { workflowApi } from "@/lib/api-client";
+import { BOARD_COLOR_TOKENS } from "@/lib/board-utils";
+import { GEMMA_MODEL } from "@/lib/gemma-server";
 import { WORKFLOW_INTEGRATIONS, getWorkflowIntegrationDefinition } from "@/lib/workflow-integration-defs";
 import { getScheduleSummary } from "@/lib/workflow-scheduler";
 import { toast } from "@/hooks/use-toast";
@@ -26,6 +29,7 @@ import type {
   WorkflowCreateRequest,
   WorkflowDataSource,
   WorkflowDataSourceProviderId,
+  GemmaConnectivityResponse,
   WorkflowPreviewResponse,
   WorkflowScheduleType,
 } from "@/types";
@@ -109,6 +113,8 @@ export default function WorkflowsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<WorkflowFormState>(EMPTY_FORM);
   const [preview, setPreview] = useState<WorkflowPreviewResponse | null>(null);
+  const [gemmaStatus, setGemmaStatus] = useState<GemmaConnectivityResponse | null>(null);
+  const [checkingGemma, setCheckingGemma] = useState(false);
 
   const editingWorkflow = useMemo(
     () => workflows.find((workflow) => workflow.id === editingId) ?? null,
@@ -131,8 +137,35 @@ export default function WorkflowsPage() {
     setLoading(false);
   }
 
+  async function refreshGemmaConnectivity({ silent = false }: { silent?: boolean } = {}) {
+    setCheckingGemma(true);
+    const result = await workflowApi.gemmaConnectivity();
+    setCheckingGemma(false);
+
+    if (result.error) {
+      const unavailable: GemmaConnectivityResponse = {
+        connected: false,
+        reason: result.error.error,
+        statusCode: 0,
+        model: GEMMA_MODEL,
+      };
+      setGemmaStatus(unavailable);
+      if (!silent) {
+        toast(unavailable.reason ?? "Unable to verify Gemma connectivity", "error");
+      }
+      return unavailable;
+    }
+
+    setGemmaStatus(result.data);
+    if (!result.data.connected && !silent) {
+      toast(result.data.reason ?? "Gemma is unavailable", "error");
+    }
+    return result.data;
+  }
+
   useEffect(() => {
     void refreshWorkflows();
+    void refreshGemmaConnectivity({ silent: true });
   }, []);
 
   function resetForm() {
@@ -182,6 +215,13 @@ export default function WorkflowsPage() {
     setPreview(null);
   }
 
+  async function ensureGemmaReady() {
+    if (form.mode !== "integration" || form.providerId !== "gemma") return true;
+    if (gemmaStatus?.connected) return true;
+    const status = await refreshGemmaConnectivity();
+    return status.connected;
+  }
+
   function buildDataSource(): WorkflowDataSource | null {
     if (form.mode !== "integration") return null;
     return {
@@ -191,11 +231,15 @@ export default function WorkflowsPage() {
   }
 
   function buildPayload(): WorkflowCreateRequest {
+    const outputTemplate = form.mode === "integration" && form.providerId === "gemma"
+      ? (getWorkflowIntegrationDefinition("gemma")?.defaultTemplate ?? "{response}")
+      : form.outputTemplate.trim();
+
     return {
       name: form.name.trim(),
       enabled: form.enabled,
       message: {
-        text: form.outputTemplate.trim(),
+        text: outputTemplate,
         alignment: "center",
         style: "default",
       },
@@ -212,8 +256,13 @@ export default function WorkflowsPage() {
   }
 
   async function refreshPreview() {
-    if (!form.outputTemplate.trim()) {
+    if (form.providerId !== "gemma" && !form.outputTemplate.trim()) {
       toast("Output template is required", "warning");
+      return;
+    }
+
+    if (!(await ensureGemmaReady())) {
+      setPreview(null);
       return;
     }
 
@@ -239,8 +288,12 @@ export default function WorkflowsPage() {
       toast("Workflow name is required", "warning");
       return;
     }
-    if (!form.outputTemplate.trim()) {
+    if (form.providerId !== "gemma" && !form.outputTemplate.trim()) {
       toast("Workflow output template is required", "warning");
+      return;
+    }
+
+    if (!(await ensureGemmaReady())) {
       return;
     }
 
@@ -300,6 +353,16 @@ export default function WorkflowsPage() {
     "The app now persists workflows in data/workflows.json and silently checks due jobs every 30 seconds while the Web UI is open.",
     "For unattended execution with no browser open, call /api/workflows/runner using CRON_SECRET from a system or Vercel cron.",
   ];
+  const gemmaBadgeVariant = checkingGemma
+    ? "info"
+    : gemmaStatus?.connected
+      ? "success"
+      : "error";
+  const gemmaStatusLabel = checkingGemma
+    ? "Checking"
+    : gemmaStatus?.connected
+      ? "Verified"
+      : "Unavailable";
 
   return (
     <div className="p-4 lg:p-6 max-w-[1400px] mx-auto">
@@ -382,9 +445,26 @@ export default function WorkflowsPage() {
 
                 {form.mode === "integration" && (
                   <div className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/30 p-3">
-                    <div>
+                  <div>
                       <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Data Providers</p>
                       <p className="text-xs text-neutral-600 mt-1">Public integrations are prioritized first so most automations work without any API key setup.</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] text-neutral-500">Gemma connection</span>
+                        <Badge variant={gemmaBadgeVariant} dot>{gemmaStatusLabel}</Badge>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => void refreshGemmaConnectivity()}
+                          loading={checkingGemma}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          Verify Gemma
+                        </Button>
+                        {gemmaStatus?.reason && !gemmaStatus.connected && (
+                          <span className="text-[11px] text-red-400">{gemmaStatus.reason}</span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
@@ -393,8 +473,9 @@ export default function WorkflowsPage() {
                           key={provider.id}
                           type="button"
                           onClick={() => changeProvider(provider.id)}
+                          disabled={provider.id === "gemma" && !gemmaStatus?.connected}
                           className={cn(
-                            "rounded-lg border p-3 text-left transition-colors",
+                            "rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                             form.providerId === provider.id
                               ? "border-indigo-500/50 bg-indigo-500/10"
                               : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
@@ -402,12 +483,28 @@ export default function WorkflowsPage() {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-sm font-medium text-neutral-200">{provider.label}</p>
-                            <Badge variant={provider.priority === "public" ? "success" : "default"}>{provider.priority}</Badge>
+                            {provider.id === "gemma" ? (
+                              <Badge variant={gemmaBadgeVariant}>{gemmaStatusLabel}</Badge>
+                            ) : (
+                              <Badge variant={provider.priority === "public" ? "success" : "default"}>{provider.priority}</Badge>
+                            )}
                           </div>
                           <p className="text-[11px] text-neutral-600 mt-1">{provider.description}</p>
+                          {provider.id === "gemma" && gemmaStatus?.reason && !gemmaStatus.connected && (
+                            <p className="mt-2 text-[11px] text-red-400">{gemmaStatus.reason}</p>
+                          )}
                         </button>
                       ))}
                     </div>
+
+                    {form.providerId === "gemma" && !gemmaStatus?.connected && (
+                      <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+                        <p className="text-sm font-medium text-red-300">Gemma cannot be used yet.</p>
+                        <p className="mt-1 text-xs text-red-200/80">
+                          {gemmaStatus?.reason ?? "Gemma must verify successfully before previewing or saving a workflow."}
+                        </p>
+                      </div>
+                    )}
 
                     {currentIntegration && currentIntegration.fields.length > 0 && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -479,11 +576,14 @@ export default function WorkflowsPage() {
                     id="workflow-output-template"
                     value={form.outputTemplate}
                     onChange={(e) => setForm((prev) => ({ ...prev, outputTemplate: e.target.value }))}
-                    className="min-h-[110px] w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-neutral-950"
+                    disabled={form.mode === "integration" && form.providerId === "gemma"}
+                    className="min-h-[110px] w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
                     placeholder={currentIntegration?.defaultTemplate ?? "GOOD MORNING TEAM"}
                   />
                   <p className="text-xs text-neutral-600">
-                    Use wildcards such as {"{tempDeg}"}, {"{headline}"}, or any other listed integration variable. Final output is normalized to board-safe text before sending.
+                    {form.mode === "integration" && form.providerId === "gemma"
+                      ? `Gemma must return exactly 45 sequential Note cells. Use _ for blank and color tokens like ${Object.keys(BOARD_COLOR_TOKENS).map((key) => `{${key}}`).join(" ")}.`
+                      : <>Use wildcards such as {"{tempDeg}"}, {"{headline}"}, or any other listed integration variable. Final output is normalized to board-safe text before sending.</>}
                   </p>
                 </div>
 
@@ -601,7 +701,7 @@ export default function WorkflowsPage() {
                   <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
                     <p className="text-[11px] uppercase tracking-wider text-neutral-500">Board Preview</p>
                     <div className="mt-3">
-                      <BoardPreview matrix={preview.renderedMatrix} />
+                      <BoardPreview matrix={preview.renderedMatrix} boardModel={preview.boardModel} />
                     </div>
                   </div>
                   <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
@@ -715,9 +815,16 @@ export default function WorkflowsPage() {
                   <div key={provider.id} className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium text-neutral-200">{provider.label}</p>
-                      <Badge variant={provider.priority === "public" ? "success" : "default"}>{provider.priority}</Badge>
+                      {provider.id === "gemma" ? (
+                        <Badge variant={gemmaBadgeVariant}>{gemmaStatusLabel}</Badge>
+                      ) : (
+                        <Badge variant={provider.priority === "public" ? "success" : "default"}>{provider.priority}</Badge>
+                      )}
                     </div>
                     <p className="text-[11px] text-neutral-500 mt-1">{provider.description}</p>
+                    {provider.id === "gemma" && gemmaStatus?.reason && !gemmaStatus.connected && (
+                      <p className="text-[11px] text-red-400 mt-2">{gemmaStatus.reason}</p>
+                    )}
                     <p className="text-[11px] text-neutral-600 mt-2 font-mono break-words">{provider.defaultTemplate}</p>
                   </div>
                 ))}

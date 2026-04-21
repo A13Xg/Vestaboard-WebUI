@@ -164,6 +164,7 @@ async function executeWorkflow(workflow: Workflow): Promise<WorkflowRunResult & 
     const send = await sendMessageToVestaboard({
       text: preview.renderedText,
       matrix: preview.renderedMatrix,
+      boardModel: preview.boardModel,
       alignment: workflow.message.alignment,
       style: workflow.message.style,
       colorInserts: workflow.message.colorInserts,
