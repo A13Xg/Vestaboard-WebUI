@@ -219,6 +219,8 @@ export interface WorkflowExecutionState {
   renderedText?: string;
   summary?: string;
   error?: string;
+  triggerSource?: string;
+  scheduledFor?: string | null;
 }
 
 export interface WorkflowIntegrationFieldDefinition {
@@ -282,6 +284,8 @@ export interface WorkflowRunResult {
   success: boolean;
   message: string;
   runAt: string;
+  triggerSource?: string;
+  scheduledFor?: string | null;
 }
 
 export interface WorkflowRunResponse {

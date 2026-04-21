@@ -85,6 +85,27 @@ Set `CRON_SECRET` in Vercel project environment variables. Vercel Cron Jobs atta
 
 `components/workflows/WorkflowRunnerHeartbeat.tsx` is a client-side React component that polls the runner API on a configurable interval when the Workflow Studio page is open. This provides in-browser scheduling without requiring an external cron service during development.
 
+## Verification Harness
+
+`npm run workflow:schedule:test` runs an end-to-end scheduling verification against a running local app instance.
+
+It verifies:
+
+1. runner auth rejection without credentials
+2. unattended runner access with `CRON_SECRET`
+3. browser-session / heartbeat-style due execution
+4. `once`, `daily`, `weekly`, and `cron` schedule advancement
+5. preview fitting across representative providers
+6. scheduled execution for representative workflow categories
+
+Requirements:
+
+- the app must already be running locally
+- `.env.local` must contain `ACCESS_CODE` and `CRON_SECRET`
+- the configured external providers used in the verifier must be reachable
+
+The verifier creates temporary workflows through the real API, waits for due times, confirms workflow state/history updates, and deletes the temporary workflows afterward.
+
 ## Preview API
 
 `POST /api/workflows/preview` — resolves the data source and renders the template without sending to the board. Used by the Workflow Studio live preview card.

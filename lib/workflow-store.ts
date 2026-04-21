@@ -21,6 +21,10 @@ const DEFAULT_WORKFLOW_FILE: WorkflowFile = {
   workflows: [],
 };
 
+interface WorkflowExecutionContext {
+  triggerSource?: string;
+}
+
 /**
  * A global singleton promise chain used as a write-lock for the workflows JSON file.
  * Stored on `global` so it survives hot-reloads in Next.js dev mode. All mutations
@@ -81,6 +85,14 @@ async function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
 /** Deep-clones a value via JSON round-trip to avoid returning mutable internal state. */
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
+}
+
+function logWorkflowStore(event: string, payload: Record<string, unknown>) {
+  try {
+    console.info(`[workflow-store.${event}]`, JSON.stringify(payload));
+  } catch {
+    console.info(`[workflow-store.${event}]`, payload);
+  }
 }
 
 export async function listWorkflows(): Promise<WorkflowListResponse> {
@@ -156,11 +168,32 @@ export async function deleteWorkflow(id: string): Promise<boolean> {
  * the resulting text to the Vestaboard API. Returns a run-result summary including
  * success/failure and the rendered text for audit logging.
  */
-async function executeWorkflow(workflow: Workflow): Promise<WorkflowRunResult & { renderedText?: string }> {
+async function executeWorkflow(
+  workflow: Workflow,
+  context: WorkflowExecutionContext = {},
+): Promise<WorkflowRunResult & { renderedText?: string }> {
+  const scheduledFor = workflow.nextRunAt ?? null;
+  const triggerSource = context.triggerSource ?? "unknown";
+
+  logWorkflowStore("execute.start", {
+    workflowId: workflow.id,
+    workflowName: workflow.name,
+    triggerSource,
+    scheduledFor,
+    providerId: workflow.dataSource?.providerId ?? "manual",
+  });
+
   try {
     const preview = await buildWorkflowPreview(workflow.message.text, workflow.dataSource ?? null, {
       alignment: workflow.message.alignment,
     });
+    logWorkflowStore("execute.preview", {
+      workflowId: workflow.id,
+      boardModel: preview.boardModel,
+      renderedText: preview.renderedText,
+      providerLabel: preview.providerLabel ?? null,
+    });
+
     const send = await sendMessageToVestaboard({
       text: preview.renderedText,
       matrix: preview.renderedMatrix,
@@ -177,15 +210,31 @@ async function executeWorkflow(workflow: Workflow): Promise<WorkflowRunResult & 
       },
     });
 
+    logWorkflowStore("execute.send", {
+      workflowId: workflow.id,
+      success: send.success,
+      provider: send.provider ?? null,
+      error: send.error ?? null,
+    });
+
     return {
       workflowId: workflow.id,
       workflowName: workflow.name,
       success: send.success,
       message: send.success ? "Message sent" : send.error ?? "Failed to send",
       runAt: new Date().toISOString(),
-        renderedText: preview.renderedText,
-      };
+      renderedText: preview.renderedText,
+      triggerSource,
+      scheduledFor,
+    };
   } catch (error) {
+    logWorkflowStore("execute.error", {
+      workflowId: workflow.id,
+      triggerSource,
+      scheduledFor,
+      error: (error as Error).message,
+    });
+
     return {
       workflowId: workflow.id,
       workflowName: workflow.name,
@@ -193,6 +242,8 @@ async function executeWorkflow(workflow: Workflow): Promise<WorkflowRunResult & 
       message: (error as Error).message,
       runAt: new Date().toISOString(),
       renderedText: undefined,
+      triggerSource,
+      scheduledFor,
     };
   }
 }
@@ -202,20 +253,31 @@ async function executeWorkflow(workflow: Workflow): Promise<WorkflowRunResult & 
  * each one sequentially, then updates `lastRunAt` / `nextRunAt` in the store.
  * Called by the runner API route on each heartbeat tick.
  */
-export async function runDueWorkflows(now: Date = new Date()): Promise<WorkflowRunResponse> {
+export async function runDueWorkflows(
+  now: Date = new Date(),
+  context: WorkflowExecutionContext = {},
+): Promise<WorkflowRunResponse> {
   return withWriteLock(async () => {
     const file = await readWorkflowFile();
     const due = file.workflows.filter((item) => item.enabled && item.nextRunAt && shouldRunNow(item.nextRunAt, now));
+    logWorkflowStore("runDue.scan", {
+      triggerSource: context.triggerSource ?? "unknown",
+      now: now.toISOString(),
+      dueCount: due.length,
+      dueWorkflowIds: due.map((item) => item.id),
+    });
 
     const results: WorkflowRunResult[] = [];
     for (const workflow of due) {
-      const result = await executeWorkflow(workflow);
+      const result = await executeWorkflow(workflow, context);
       results.push({
         workflowId: result.workflowId,
         workflowName: result.workflowName,
         success: result.success,
         message: result.message,
         runAt: result.runAt,
+        triggerSource: result.triggerSource,
+        scheduledFor: result.scheduledFor,
       });
 
       const idx = file.workflows.findIndex((item) => item.id === workflow.id);
@@ -231,22 +293,29 @@ export async function runDueWorkflows(now: Date = new Date()): Promise<WorkflowR
           renderedText: result.renderedText,
           summary: result.message,
           error: result.success ? undefined : result.message,
+          triggerSource: result.triggerSource,
+          scheduledFor: result.scheduledFor,
         };
       }
     }
 
     await writeWorkflowFile(file);
+    logWorkflowStore("runDue.complete", {
+      triggerSource: context.triggerSource ?? "unknown",
+      triggered: results.length,
+      workflowIds: results.map((item) => item.workflowId),
+    });
     return { triggered: results.length, results };
   });
 }
 
-export async function runWorkflowById(id: string): Promise<WorkflowRunResult | null> {
+export async function runWorkflowById(id: string, context: WorkflowExecutionContext = {}): Promise<WorkflowRunResult | null> {
   return withWriteLock(async () => {
     const file = await readWorkflowFile();
     const idx = file.workflows.findIndex((item) => item.id === id);
     if (idx === -1) return null;
 
-    const result = await executeWorkflow(file.workflows[idx]);
+    const result = await executeWorkflow(file.workflows[idx], context);
     file.workflows[idx].lastRunAt = result.runAt;
     file.workflows[idx].nextRunAt = file.workflows[idx].enabled
       ? computeNextRunAt(file.workflows[idx].schedule, new Date(result.runAt))
@@ -258,8 +327,15 @@ export async function runWorkflowById(id: string): Promise<WorkflowRunResult | n
       renderedText: result.renderedText,
       summary: result.message,
       error: result.success ? undefined : result.message,
+      triggerSource: result.triggerSource,
+      scheduledFor: result.scheduledFor,
     };
     await writeWorkflowFile(file);
+    logWorkflowStore("runOne.complete", {
+      workflowId: result.workflowId,
+      triggerSource: result.triggerSource ?? "unknown",
+      success: result.success,
+    });
 
     return {
       workflowId: result.workflowId,
@@ -267,6 +343,8 @@ export async function runWorkflowById(id: string): Promise<WorkflowRunResult | n
       success: result.success,
       message: result.message,
       runAt: result.runAt,
+      triggerSource: result.triggerSource,
+      scheduledFor: result.scheduledFor,
     };
   });
 }

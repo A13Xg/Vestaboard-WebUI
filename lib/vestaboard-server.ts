@@ -16,6 +16,10 @@ interface SendHistoryContext {
 
 const RW_ENDPOINT = "https://rw.vestaboard.com/";
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function getApiToken() {
   return process.env.VESTABOARD_API_TOKEN;
 }
@@ -215,43 +219,64 @@ export async function sendMessageToVestaboard(body: SendRequest, historyContext:
     : matrixToPlainText(matrix);
 
   try {
-    const res = await fetch(RW_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "X-Vestaboard-Read-Write-Key": token,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(matrix),
-      cache: "no-store",
-    });
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const res = await fetch(RW_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "X-Vestaboard-Read-Write-Key": token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(matrix),
+        cache: "no-store",
+      });
 
-    if (!res.ok) {
-      const text = await res.text();
+      if (!res.ok) {
+        const text = await res.text();
+        const retriable = res.status === 429 || /ratelimited|another message currently being sent/i.test(text);
+        if (retriable && attempt < 3) {
+          const delayMs = 1500 * (attempt + 1);
+          console.warn("[vestaboard.send.retry]", JSON.stringify({
+            attempt: attempt + 1,
+            delayMs,
+            status: res.status,
+            text: text.slice(0, 160),
+          }));
+          await sleep(delayMs);
+          continue;
+        }
+
+        return {
+          success: false,
+          error: `Vestaboard API error ${res.status}: ${text.slice(0, 160)}`,
+          provider: "vestaboard" as const,
+        };
+      }
+
+      try {
+        await appendMessageHistory({
+          submittedBy: body.submittedBy ?? "authenticated-user",
+          source: historyContext.source ?? "manual",
+          provider: "vestaboard",
+          boardModel,
+          text: resolvedText,
+          matrix,
+          meta: historyContext.meta,
+        });
+      } catch (historyErr) {
+        console.error("[message-history.append]", historyErr);
+      }
+
       return {
-        success: false,
-        error: `Vestaboard API error ${res.status}: ${text.slice(0, 160)}`,
+        success: true,
         provider: "vestaboard" as const,
+        messageId: `vb-${Date.now()}`,
       };
     }
 
-    try {
-      await appendMessageHistory({
-        submittedBy: body.submittedBy ?? "authenticated-user",
-        source: historyContext.source ?? "manual",
-        provider: "vestaboard",
-        boardModel,
-        text: resolvedText,
-        matrix,
-        meta: historyContext.meta,
-      });
-    } catch (historyErr) {
-      console.error("[message-history.append]", historyErr);
-    }
-
     return {
-      success: true,
+      success: false,
+      error: "Vestaboard send attempts exhausted",
       provider: "vestaboard" as const,
-      messageId: `vb-${Date.now()}`,
     };
   } catch (error) {
     return {

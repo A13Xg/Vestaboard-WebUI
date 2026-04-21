@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { workflowApi } from "@/lib/api-client";
 
 export function WorkflowRunnerHeartbeat() {
   useEffect(() => {
@@ -10,7 +9,14 @@ export function WorkflowRunnerHeartbeat() {
     const tick = async () => {
       if (cancelled || document.visibilityState !== "visible") return;
       try {
-        await workflowApi.runDue();
+        await fetch("/api/workflows/runner", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Workflow-Runner-Source": "heartbeat",
+          },
+          body: JSON.stringify({ mode: "due" }),
+        });
       } catch {
         // Silent heartbeat; visible workflow status remains on the workflows page.
       }

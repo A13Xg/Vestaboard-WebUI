@@ -9,6 +9,14 @@ interface RunnerBody {
   workflowId?: string;
 }
 
+function logWorkflowRunner(event: string, payload: Record<string, unknown>) {
+  try {
+    console.info(`[workflows.runner.${event}]`, JSON.stringify(payload));
+  } catch {
+    console.info(`[workflows.runner.${event}]`, payload);
+  }
+}
+
 /**
  * Accepts the CRON_SECRET in either the `X-Cron-Secret` header or a Bearer token
  * so the route can be triggered both by Vercel Cron Jobs and custom schedulers.
@@ -39,21 +47,44 @@ export async function POST(req: NextRequest) {
     }
 
     const body = (await req.json().catch(() => ({}))) as RunnerBody;
+    const triggerSource = req.headers.get("x-workflow-runner-source")
+      ?? (cronAuthorized ? "cron-secret" : body.mode === "single" ? "session-manual" : "session-runner");
+    logWorkflowRunner("request", {
+      method: "POST",
+      mode: body.mode ?? "due",
+      workflowId: body.workflowId ?? null,
+      isAuthenticated,
+      cronAuthorized,
+      triggerSource,
+    });
 
     if (body.mode === "single") {
       if (!body.workflowId) {
         return NextResponse.json({ error: "workflowId is required for single mode" }, { status: 400 });
       }
 
-      const result = await runWorkflowById(body.workflowId);
+      const result = await runWorkflowById(body.workflowId, { triggerSource });
       if (!result) {
         return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
       }
 
+      logWorkflowRunner("response", {
+        method: "POST",
+        mode: "single",
+        workflowId: body.workflowId,
+        triggerSource,
+        success: result.success,
+      });
       return NextResponse.json({ triggered: 1, results: [result] });
     }
 
-    const due = await runDueWorkflows();
+    const due = await runDueWorkflows(new Date(), { triggerSource });
+    logWorkflowRunner("response", {
+      method: "POST",
+      mode: "due",
+      triggerSource,
+      triggered: due.triggered,
+    });
     return NextResponse.json(due);
   } catch (err) {
     return unexpectedError("workflows.runner.post", err);
@@ -69,7 +100,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized", detail: "Missing session and cron secret" }, { status: 401 });
     }
 
-    const due = await runDueWorkflows();
+    const triggerSource = req.headers.get("x-workflow-runner-source")
+      ?? (cronAuthorized ? "cron-secret" : "session-runner");
+    logWorkflowRunner("request", {
+      method: "GET",
+      mode: "due",
+      isAuthenticated,
+      cronAuthorized,
+      triggerSource,
+    });
+    const due = await runDueWorkflows(new Date(), { triggerSource });
+    logWorkflowRunner("response", {
+      method: "GET",
+      mode: "due",
+      triggerSource,
+      triggered: due.triggered,
+    });
     return NextResponse.json(due);
   } catch (err) {
     return unexpectedError("workflows.runner.get", err);

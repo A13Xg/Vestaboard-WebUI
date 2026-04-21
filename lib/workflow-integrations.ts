@@ -337,9 +337,13 @@ async function resolveStocks(config: Record<string, string>) {
   if (!res.ok) throw new Error("Stock quote lookup failed");
   const text = await res.text();
   const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) throw new Error(`No stock data returned for ${symbol}`);
-  const header = lines[0].split(",");
-  const values = lines[1].split(",");
+  if (lines.length < 1 || !lines[0]) throw new Error(`No stock data returned for ${symbol}`);
+  const hasHeader = lines.length >= 2 && /^symbol,/i.test(lines[0]);
+  const header = hasHeader
+    ? lines[0].split(",")
+    : ["symbol", "date", "time", "open", "high", "low", "close", "volume", "name"];
+  const values = hasHeader ? lines[1].split(",") : lines[0].split(",");
+  if (values.length < 8) throw new Error(`No stock data returned for ${symbol}`);
   const map = Object.fromEntries(header.map((key, idx) => [key.trim().toLowerCase(), values[idx]?.trim() ?? ""]));
   return {
     symbol: sanitizeBoardText(map.symbol || symbol.toUpperCase()),
