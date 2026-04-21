@@ -2,34 +2,93 @@
   "version": 1,
   "workflows": [
     {
-      "id": "wf-1776738942324-dewetn",
-      "name": "Time",
+      "id": "wf-1776754055622-g6ywva",
+      "name": "Weather",
       "enabled": true,
       "message": {
-        "text": "{timezoneLabel} {time} {date}",
+        "text": "Las Vegas Weather\nTEMP:  {tempDegF}F",
         "alignment": "center",
         "style": "default",
         "colorInserts": []
       },
       "dataSource": {
-        "providerId": "time",
+        "providerId": "weather",
         "config": {
-          "timezone": "America/Los_Angeles"
+          "location": "North Las Vegas"
         }
       },
       "schedule": {
         "type": "daily",
         "timeHHMM": "09:00"
       },
-      "createdAt": "2026-04-21T02:35:42.324Z",
-      "updatedAt": "2026-04-21T02:35:45.772Z",
+      "createdAt": "2026-04-21T06:47:35.622Z",
+      "updatedAt": "2026-04-21T06:47:35.622Z",
       "nextRunAt": "2026-04-21T16:00:00.000Z",
-      "lastRunAt": "2026-04-21T02:35:45.772Z",
+      "lastRunAt": null,
+      "lastExecution": null
+    },
+    {
+      "id": "wf-1776753913735-4y0vf3",
+      "name": "Joke",
+      "enabled": true,
+      "message": {
+        "text": "{setup} {punchline}",
+        "alignment": "center",
+        "style": "default",
+        "colorInserts": []
+      },
+      "dataSource": {
+        "providerId": "joke",
+        "config": {}
+      },
+      "schedule": {
+        "type": "daily",
+        "timeHHMM": "18:00"
+      },
+      "createdAt": "2026-04-21T06:45:13.735Z",
+      "updatedAt": "2026-04-21T06:50:58.923Z",
+      "nextRunAt": "2026-04-22T01:00:00.000Z",
+      "lastRunAt": "2026-04-21T06:50:58.923Z",
       "lastExecution": {
         "success": true,
-        "executedAt": "2026-04-21T02:35:45.772Z",
-        "renderedText": "LOS ANGELES 19:35:45 04/20/2026",
-        "summary": "Message sent"
+        "executedAt": "2026-04-21T06:50:58.923Z",
+        "renderedText": "WHAT'S 50 CENT'S NAME\n   IN ZIMBABWE? 200\n       DOLLARS.",
+        "summary": "Message sent",
+        "triggerSource": "session-manual",
+        "scheduledFor": "2026-04-22T01:00:00.000Z"
+      }
+    },
+    {
+      "id": "wf-1776753808714-xud3ch",
+      "name": "Midnight Art",
+      "enabled": true,
+      "message": {
+        "text": "{response}",
+        "alignment": "center",
+        "style": "default",
+        "colorInserts": []
+      },
+      "dataSource": {
+        "providerId": "gemma",
+        "config": {
+          "prompt": "Generate color art."
+        }
+      },
+      "schedule": {
+        "type": "daily",
+        "timeHHMM": "00:00"
+      },
+      "createdAt": "2026-04-21T06:43:28.714Z",
+      "updatedAt": "2026-04-21T06:51:40.989Z",
+      "nextRunAt": "2026-04-21T07:00:00.000Z",
+      "lastRunAt": "2026-04-21T06:51:40.989Z",
+      "lastExecution": {
+        "success": true,
+        "executedAt": "2026-04-21T06:51:40.989Z",
+        "renderedText": "DIAGONAL R O Y",
+        "summary": "Message sent",
+        "triggerSource": "session-manual",
+        "scheduledFor": "2026-04-21T07:00:00.000Z"
       }
     }
   ]

@@ -53,3 +53,5 @@ yarn-error.log*
 next-env.d.ts
 data/transition.json
 data/workflows.json
+data/message-history.json
+data/workflows.json
