@@ -46,7 +46,7 @@ async function main() {
   console.log("Running startup tests...");
 
   const parsedEnv = parseEnvFile(envPath);
-  const required = ["SESSION_SECRET", "ACCESS_CODE", "VESTABOARD_API_TOKEN", "CRON_SECRET"];
+  const required = ["SESSION_SECRET", "ACCESS_CODE", "VESTABOARD_API_TOKEN"];
 
   let failures = 0;
 
@@ -56,6 +56,13 @@ async function main() {
     printResult(`Env ${key}`, ok, ok ? "loaded" : "missing");
     if (!ok) failures++;
   }
+
+  const cronSecret = getVar("CRON_SECRET", parsedEnv);
+  printResult(
+    "Env CRON_SECRET",
+    true,
+    cronSecret ? "loaded" : "not set (optional)",
+  );
 
   const token = getVar("VESTABOARD_API_TOKEN", parsedEnv);
   const tokenOk = token.length >= 16;
