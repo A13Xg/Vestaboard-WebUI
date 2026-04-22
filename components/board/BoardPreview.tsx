@@ -25,7 +25,6 @@ interface BoardPreviewProps {
 }
 
 const GAP = 2;
-const FRAME_PADDING = 20; // px on each side
 
 // ─── Duration helpers ─────────────────────────────────────────────────────────
 
@@ -45,20 +44,22 @@ export function BoardPreview({ matrix, loading, className, boardModel, cellSize:
   const rows = resolvedProfile.rows;
   const cols = resolvedProfile.cols;
   const containerRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(propCellSize ?? 14);
   const [animationSeed, setAnimationSeed] = useState(0);
 
   useEffect(() => {
     if (propCellSize) return;
     const calc = () => {
-      if (!containerRef.current) return;
-      const w = containerRef.current.clientWidth - FRAME_PADDING * 2;
+      if (!frameRef.current) return;
+      const w = frameRef.current.clientWidth - 8;
       const maxCellW = Math.floor((w - (cols - 1) * GAP) / cols);
       setCellSize(Math.min(Math.max(maxCellW, 8), 24));
     };
     calc();
     const ro = new ResizeObserver(calc);
     if (containerRef.current) ro.observe(containerRef.current);
+    if (frameRef.current) ro.observe(frameRef.current);
     return () => ro.disconnect();
   }, [propCellSize, cols]);
 
@@ -121,6 +122,7 @@ export function BoardPreview({ matrix, loading, className, boardModel, cellSize:
       <div className="flex items-center justify-center p-5">
         {/* Inner frame / bezel */}
         <div
+          ref={frameRef}
           className="relative rounded-lg overflow-hidden bg-neutral-950 border border-neutral-800 p-4"
           style={{ boxShadow: "inset 0 2px 12px rgba(0,0,0,0.8)" }}
         >

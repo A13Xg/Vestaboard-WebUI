@@ -211,6 +211,7 @@ export interface WorkflowMessageTemplate {
 export interface WorkflowDataSource {
   providerId: WorkflowDataSourceProviderId;
   config: Record<string, string>;
+  enabled?: boolean;
 }
 
 export interface WorkflowExecutionState {
@@ -229,6 +230,7 @@ export interface WorkflowIntegrationFieldDefinition {
   placeholder?: string;
   defaultValue?: string;
   helpText?: string;
+  inputType?: "text" | "textarea" | "checkbox";
   multiline?: boolean;
   rows?: number;
 }
@@ -250,6 +252,7 @@ export interface Workflow {
   enabled: boolean;
   message: WorkflowMessageTemplate;
   dataSource?: WorkflowDataSource | null;
+  dataSources?: WorkflowDataSource[];
   schedule: WorkflowSchedule;
   createdAt: string;
   updatedAt: string;
@@ -263,6 +266,7 @@ export interface WorkflowCreateRequest {
   enabled: boolean;
   message: WorkflowMessageTemplate;
   dataSource?: WorkflowDataSource | null;
+  dataSources?: WorkflowDataSource[];
   schedule: WorkflowSchedule;
 }
 
@@ -271,6 +275,7 @@ export interface WorkflowUpdateRequest {
   enabled?: boolean;
   message?: Partial<WorkflowMessageTemplate>;
   dataSource?: WorkflowDataSource | null;
+  dataSources?: WorkflowDataSource[];
   schedule?: Partial<WorkflowSchedule>;
 }
 
@@ -296,6 +301,8 @@ export interface WorkflowRunResponse {
 export interface WorkflowPreviewRequest {
   message: WorkflowMessageTemplate;
   dataSource?: WorkflowDataSource | null;
+  dataSources?: WorkflowDataSource[];
+  boardModel?: "flagship" | "note";
 }
 
 export interface WorkflowPreviewResponse {

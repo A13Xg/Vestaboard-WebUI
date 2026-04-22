@@ -119,10 +119,6 @@ export default function DashboardPage() {
       >
         <div className="flex flex-col gap-5 min-w-0">
           <motion.div custom={1} variants={fadeUp} initial="hidden" animate="show">
-            <UpcomingStatsCard presetsCount={presets.length} />
-          </motion.div>
-
-          <motion.div custom={2} variants={fadeUp} initial="hidden" animate="show">
             <Card variant="inset" padding="md">
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
@@ -149,6 +145,10 @@ export default function DashboardPage() {
                 sending={false}
               />
             </Card>
+          </motion.div>
+
+          <motion.div custom={2} variants={fadeUp} initial="hidden" animate="show">
+            <UpcomingStatsCard presetsCount={presets.length} />
           </motion.div>
 
         </div>

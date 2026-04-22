@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
   CalendarClock,
+  Check,
   Play,
   Plus,
   RefreshCw,
@@ -12,12 +13,14 @@ import {
   Sparkles,
   Trash2,
   Workflow as WorkflowIcon,
+  X,
 } from "lucide-react";
 import { BoardPreview } from "@/components/board";
 import { CurrentDisplayCard } from "@/components/dashboard/CurrentDisplayCard";
 import { UpcomingStatsCard } from "@/components/dashboard/UpcomingStatsCard";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@/components/ui";
 import { useBoardState } from "@/hooks/use-board-state";
+import { useBoardModel } from "@/hooks/use-board-model";
 import { workflowApi } from "@/lib/api-client";
 import { BOARD_COLOR_TOKENS } from "@/lib/board-utils";
 import { GEMMA_MODEL } from "@/lib/gemma-server";
@@ -56,12 +59,16 @@ const WEEKDAYS = [
 
 type BuilderMode = "static" | "integration";
 
+type WorkflowSourceForm = {
+  enabled: boolean;
+  config: Record<string, string>;
+};
+
 type WorkflowFormState = {
   name: string;
   enabled: boolean;
   mode: BuilderMode;
-  providerId: WorkflowDataSourceProviderId;
-  providerConfig: Record<string, string>;
+  sources: Partial<Record<WorkflowDataSourceProviderId, WorkflowSourceForm>>;
   outputTemplate: string;
   scheduleType: WorkflowScheduleType;
   timeHHMM: string;
@@ -77,12 +84,22 @@ function defaultsForProvider(providerId: WorkflowDataSourceProviderId) {
 
 const DEFAULT_PROVIDER: WorkflowDataSourceProviderId = "weather";
 
+const COLOR_PLACEHOLDER_BADGES = Object.keys(BOARD_COLOR_TOKENS).map((token) => `{${token}}`);
+
+function buildDefaultSources() {
+  return {
+    [DEFAULT_PROVIDER]: {
+      enabled: true,
+      config: defaultsForProvider(DEFAULT_PROVIDER),
+    },
+  } satisfies Partial<Record<WorkflowDataSourceProviderId, WorkflowSourceForm>>;
+}
+
 const EMPTY_FORM: WorkflowFormState = {
   name: "",
   enabled: true,
   mode: "integration",
-  providerId: DEFAULT_PROVIDER,
-  providerConfig: defaultsForProvider(DEFAULT_PROVIDER),
+  sources: buildDefaultSources(),
   outputTemplate: getWorkflowIntegrationDefinition(DEFAULT_PROVIDER)?.defaultTemplate ?? "",
   scheduleType: "daily",
   timeHHMM: "09:00",
@@ -105,6 +122,7 @@ function toLocalInputValue(iso?: string | null) {
 }
 
 export default function WorkflowsPage() {
+  const { model } = useBoardModel();
   const { display, syncing, refresh: refreshBoard } = useBoardState();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,15 +133,23 @@ export default function WorkflowsPage() {
   const [preview, setPreview] = useState<WorkflowPreviewResponse | null>(null);
   const [gemmaStatus, setGemmaStatus] = useState<GemmaConnectivityResponse | null>(null);
   const [checkingGemma, setCheckingGemma] = useState(false);
+  const [activeProviderDialog, setActiveProviderDialog] = useState<WorkflowDataSourceProviderId | null>(null);
 
   const editingWorkflow = useMemo(
     () => workflows.find((workflow) => workflow.id === editingId) ?? null,
     [workflows, editingId]
   );
 
-  const currentIntegration = useMemo(
-    () => getWorkflowIntegrationDefinition(form.providerId),
-    [form.providerId]
+  const activeProviders = useMemo(
+    () => Object.entries(form.sources)
+      .filter(([, source]) => !!source && source.enabled !== false)
+      .map(([providerId]) => providerId as WorkflowDataSourceProviderId),
+    [form.sources],
+  );
+
+  const activeIntegration = useMemo(
+    () => activeProviderDialog ? getWorkflowIntegrationDefinition(activeProviderDialog) : undefined,
+    [activeProviderDialog],
   );
 
   async function refreshWorkflows() {
@@ -170,19 +196,30 @@ export default function WorkflowsPage() {
 
   function resetForm() {
     setEditingId(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, sources: buildDefaultSources() });
     setPreview(null);
   }
 
   function applyEdit(workflow: Workflow) {
-    const providerId = workflow.dataSource?.providerId ?? DEFAULT_PROVIDER;
+    const existingSources = workflow.dataSources ?? (workflow.dataSource ? [workflow.dataSource] : []);
+    const sourceMap: Partial<Record<WorkflowDataSourceProviderId, WorkflowSourceForm>> = {};
+    for (const source of existingSources) {
+      sourceMap[source.providerId] = {
+        enabled: source.enabled !== false,
+        config: source.config,
+      };
+    }
+
+    if (Object.keys(sourceMap).length === 0) {
+      sourceMap[DEFAULT_PROVIDER] = { enabled: true, config: defaultsForProvider(DEFAULT_PROVIDER) };
+    }
+
     setEditingId(workflow.id);
     setForm({
       name: workflow.name,
       enabled: workflow.enabled,
-      mode: workflow.dataSource ? "integration" : "static",
-      providerId,
-      providerConfig: workflow.dataSource?.config ?? defaultsForProvider(providerId),
+      mode: existingSources.length > 0 ? "integration" : "static",
+      sources: sourceMap,
       outputTemplate: workflow.message.text,
       scheduleType: workflow.schedule.type,
       timeHHMM: workflow.schedule.timeHHMM ?? "09:00",
@@ -203,37 +240,59 @@ export default function WorkflowsPage() {
     });
   }
 
-  function changeProvider(providerId: WorkflowDataSourceProviderId) {
-    const definition = getWorkflowIntegrationDefinition(providerId);
+  function toggleProvider(providerId: WorkflowDataSourceProviderId, enabled: boolean) {
     setForm((prev) => ({
       ...prev,
       mode: "integration",
-      providerId,
-      providerConfig: defaultsForProvider(providerId),
-      outputTemplate: definition?.defaultTemplate ?? prev.outputTemplate,
+      sources: {
+        ...prev.sources,
+        [providerId]: {
+          enabled,
+          config: prev.sources[providerId]?.config ?? defaultsForProvider(providerId),
+        },
+      },
+      outputTemplate: prev.outputTemplate || getWorkflowIntegrationDefinition(providerId)?.defaultTemplate || prev.outputTemplate,
     }));
-    setPreview(null);
+  }
+
+  function updateProviderConfig(providerId: WorkflowDataSourceProviderId, key: string, value: string) {
+    setForm((prev) => ({
+      ...prev,
+      sources: {
+        ...prev.sources,
+        [providerId]: {
+          enabled: prev.sources[providerId]?.enabled !== false,
+          config: {
+            ...(prev.sources[providerId]?.config ?? defaultsForProvider(providerId)),
+            [key]: value,
+          },
+        },
+      },
+    }));
   }
 
   async function ensureGemmaReady() {
-    if (form.mode !== "integration" || form.providerId !== "gemma") return true;
+    if (form.mode !== "integration") return true;
+    if (!form.sources.gemma || form.sources.gemma.enabled === false) return true;
     if (gemmaStatus?.connected) return true;
     const status = await refreshGemmaConnectivity();
     return status.connected;
   }
 
-  function buildDataSource(): WorkflowDataSource | null {
-    if (form.mode !== "integration") return null;
-    return {
-      providerId: form.providerId,
-      config: form.providerConfig,
-    };
+  function buildDataSources(): WorkflowDataSource[] {
+    if (form.mode !== "integration") return [];
+    return (Object.entries(form.sources) as [WorkflowDataSourceProviderId, WorkflowSourceForm | undefined][])
+      .filter(([, source]) => !!source && source.enabled !== false)
+      .map(([providerId, source]) => ({
+        providerId,
+        config: source?.config ?? {},
+        enabled: source?.enabled !== false,
+      }));
   }
 
   function buildPayload(): WorkflowCreateRequest {
-    const outputTemplate = form.mode === "integration" && form.providerId === "gemma"
-      ? (getWorkflowIntegrationDefinition("gemma")?.defaultTemplate ?? "{response}")
-      : form.outputTemplate.trim();
+    const dataSources = buildDataSources();
+    const outputTemplate = form.outputTemplate.trim();
 
     return {
       name: form.name.trim(),
@@ -243,7 +302,8 @@ export default function WorkflowsPage() {
         alignment: "center",
         style: "default",
       },
-      dataSource: buildDataSource(),
+      dataSource: dataSources[0] ?? null,
+      dataSources,
       schedule:
         form.scheduleType === "once"
           ? { type: "once", at: toIsoLocal(form.onceAt) }
@@ -256,7 +316,7 @@ export default function WorkflowsPage() {
   }
 
   async function refreshPreview() {
-    if (form.providerId !== "gemma" && !form.outputTemplate.trim()) {
+    if (!form.outputTemplate.trim()) {
       toast("Output template is required", "warning");
       return;
     }
@@ -267,9 +327,12 @@ export default function WorkflowsPage() {
     }
 
     setPreviewing(true);
+    const dataSources = buildDataSources();
     const result = await workflowApi.preview({
       message: { text: form.outputTemplate },
-      dataSource: buildDataSource(),
+      dataSource: dataSources[0] ?? null,
+      dataSources,
+      boardModel: model,
     });
 
     if (result.error) {
@@ -288,7 +351,7 @@ export default function WorkflowsPage() {
       toast("Workflow name is required", "warning");
       return;
     }
-    if (form.providerId !== "gemma" && !form.outputTemplate.trim()) {
+    if (!form.outputTemplate.trim()) {
       toast("Workflow output template is required", "warning");
       return;
     }
@@ -445,9 +508,9 @@ export default function WorkflowsPage() {
 
                 {form.mode === "integration" && (
                   <div className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/30 p-3">
-                  <div>
+                    <div>
                       <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Data Providers</p>
-                      <p className="text-xs text-neutral-600 mt-1">Public integrations are prioritized first so most automations work without any API key setup.</p>
+                      <p className="text-xs text-neutral-600 mt-1">Click any integration to open settings, wildcards, and enable controls. Mix multiple providers in one template.</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className="text-[11px] text-neutral-500">Gemma connection</span>
                         <Badge variant={gemmaBadgeVariant} dot>{gemmaStatusLabel}</Badge>
@@ -472,24 +535,42 @@ export default function WorkflowsPage() {
                         <button
                           key={provider.id}
                           type="button"
-                          onClick={() => changeProvider(provider.id)}
+                          onClick={() => {
+                            setActiveProviderDialog(provider.id);
+                            if (!form.sources[provider.id]) {
+                              toggleProvider(provider.id, true);
+                            }
+                          }}
                           disabled={provider.id === "gemma" && !gemmaStatus?.connected}
                           className={cn(
                             "rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                            form.providerId === provider.id
+                            form.sources[provider.id]?.enabled
                               ? "border-indigo-500/50 bg-indigo-500/10"
                               : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
                           )}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-sm font-medium text-neutral-200">{provider.label}</p>
-                            {provider.id === "gemma" ? (
-                              <Badge variant={gemmaBadgeVariant}>{gemmaStatusLabel}</Badge>
-                            ) : (
-                              <Badge variant={provider.priority === "public" ? "success" : "default"}>{provider.priority}</Badge>
-                            )}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={form.sources[provider.id]?.enabled !== false}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => toggleProvider(provider.id, e.target.checked)}
+                                aria-label={`Enable ${provider.label} integration`}
+                              />
+                              {provider.id === "gemma" ? (
+                                <Badge variant={gemmaBadgeVariant}>{gemmaStatusLabel}</Badge>
+                              ) : (
+                                <Badge variant={provider.priority === "public" ? "success" : "default"}>{provider.priority}</Badge>
+                              )}
+                            </div>
                           </div>
                           <p className="text-[11px] text-neutral-600 mt-1">{provider.description}</p>
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="text-[11px] text-neutral-500">{form.sources[provider.id]?.enabled ? "Enabled" : "Disabled"}</span>
+                            {form.sources[provider.id]?.enabled && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                          </div>
                           {provider.id === "gemma" && gemmaStatus?.reason && !gemmaStatus.connected && (
                             <p className="mt-2 text-[11px] text-red-400">{gemmaStatus.reason}</p>
                           )}
@@ -497,7 +578,7 @@ export default function WorkflowsPage() {
                       ))}
                     </div>
 
-                    {form.providerId === "gemma" && !gemmaStatus?.connected && (
+                    {form.sources.gemma?.enabled && !gemmaStatus?.connected && (
                       <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
                         <p className="text-sm font-medium text-red-300">Gemma cannot be used yet.</p>
                         <p className="mt-1 text-xs text-red-200/80">
@@ -506,61 +587,19 @@ export default function WorkflowsPage() {
                       </div>
                     )}
 
-                    {currentIntegration && currentIntegration.fields.length > 0 && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {currentIntegration.fields.map((field) => (
-                          <div key={field.key} className={field.multiline ? "md:col-span-2" : undefined}>
-                            {field.multiline ? (
-                              <div className="flex flex-col gap-1.5 w-full">
-                                <label
-                                  htmlFor={`provider-${field.key}`}
-                                  className="text-xs font-medium text-neutral-400 uppercase tracking-wider"
-                                >
-                                  {field.label}
-                                </label>
-                                <textarea
-                                  id={`provider-${field.key}`}
-                                  rows={field.rows ?? 4}
-                                  value={form.providerConfig[field.key] ?? ""}
-                                  placeholder={field.placeholder}
-                                  onChange={(e) => setForm((prev) => ({
-                                    ...prev,
-                                    providerConfig: { ...prev.providerConfig, [field.key]: e.target.value },
-                                  }))}
-                                  className="min-h-[110px] w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-neutral-950"
-                                />
-                                {field.helpText && (
-                                  <p className="text-xs text-neutral-600">{field.helpText}</p>
-                                )}
-                              </div>
-                            ) : (
-                              <div>
-                                <Input
-                                  id={`provider-${field.key}`}
-                                  label={field.label}
-                                  value={form.providerConfig[field.key] ?? ""}
-                                  placeholder={field.placeholder}
-                                  onChange={(e) => setForm((prev) => ({
-                                    ...prev,
-                                    providerConfig: { ...prev.providerConfig, [field.key]: e.target.value },
-                                  }))}
-                                />
-                                {field.helpText && (
-                                  <p className="text-xs text-neutral-600 mt-1.5">{field.helpText}</p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {currentIntegration && (
+                    {activeProviders.length > 0 && (
                       <div className="rounded-lg border border-neutral-800 bg-neutral-950/60 p-3">
-                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Available Variables</p>
+                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Enabled Wildcards</p>
                         <div className="flex flex-wrap gap-1.5 mt-2">
-                          {currentIntegration.availableVariables.map((variable) => (
-                            <Badge key={variable} variant="default">{`{${variable}}`}</Badge>
+                          {activeProviders.flatMap((providerId) => {
+                            const integration = getWorkflowIntegrationDefinition(providerId);
+                            if (!integration) return [];
+                            return integration.availableVariables.map((variable) => (
+                              <Badge key={`${providerId}-${variable}`} variant="default">{`{${variable}}`}</Badge>
+                            ));
+                          })}
+                          {COLOR_PLACEHOLDER_BADGES.map((token) => (
+                            <Badge key={`color-${token}`} variant="success">{token}</Badge>
                           ))}
                         </div>
                       </div>
@@ -576,14 +615,11 @@ export default function WorkflowsPage() {
                     id="workflow-output-template"
                     value={form.outputTemplate}
                     onChange={(e) => setForm((prev) => ({ ...prev, outputTemplate: e.target.value }))}
-                    disabled={form.mode === "integration" && form.providerId === "gemma"}
-                    className="min-h-[110px] w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
-                    placeholder={currentIntegration?.defaultTemplate ?? "GOOD MORNING TEAM"}
+                    className="min-h-[110px] w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-neutral-950"
+                    placeholder="NOW {time} | {headline} | {quote} {R}"
                   />
                   <p className="text-xs text-neutral-600">
-                    {form.mode === "integration" && form.providerId === "gemma"
-                      ? `Gemma must return exactly 45 sequential Note cells. Use _ for blank and color tokens like ${Object.keys(BOARD_COLOR_TOKENS).map((key) => `{${key}}`).join(" ")}.`
-                      : <>Use wildcards such as {"{tempDeg}"}, {"{headline}"}, or any other listed integration variable. Final output is normalized to board-safe text before sending.</>}
+                    Use plain text and any enabled wildcards together, like {"{tempDeg}"} + {"{headline}"}. Color placeholders {COLOR_PLACEHOLDER_BADGES.join(" ")} are also supported.
                   </p>
                 </div>
 
@@ -761,15 +797,23 @@ export default function WorkflowsPage() {
 
                 {workflows.map((workflow) => (
                   <div key={workflow.id} className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-3">
+                    {(() => {
+                      const sources = workflow.dataSources ?? (workflow.dataSource ? [workflow.dataSource] : []);
+                      const sourceLabels = sources
+                        .filter((source) => source.enabled !== false)
+                        .map((source) => getWorkflowIntegrationDefinition(source.providerId)?.label ?? source.providerId);
+                      return (
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-neutral-200 truncate">{workflow.name}</p>
                         <p className="text-xs text-neutral-500 mt-0.5 truncate">
-                          {workflow.dataSource ? `${getWorkflowIntegrationDefinition(workflow.dataSource.providerId)?.label} integration` : "Static message"}
+                          {sourceLabels.length > 0 ? `${sourceLabels.join(" + ")} integration` : "Static message"}
                         </p>
                       </div>
                       <Badge variant={workflow.enabled ? "success" : "default"}>{workflow.enabled ? "Enabled" : "Disabled"}</Badge>
                     </div>
+                      );
+                    })()}
 
                     <div className="mt-2 rounded-lg border border-neutral-800 px-2.5 py-2">
                       <p className="text-[11px] uppercase tracking-wider text-neutral-500">Template</p>
@@ -833,6 +877,138 @@ export default function WorkflowsPage() {
           </motion.div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {activeProviderDialog && activeIntegration && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+              onClick={() => setActiveProviderDialog(null)}
+            />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                transition={{ type: "spring", stiffness: 320, damping: 26 }}
+                className="w-full max-w-2xl rounded-2xl border border-neutral-800 bg-neutral-900 p-5 shadow-2xl"
+                role="dialog"
+                aria-modal="true"
+              >
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-100">{activeIntegration.label} Settings</p>
+                    <p className="mt-1 text-xs text-neutral-500">{activeIntegration.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveProviderDialog(null)}
+                    className="rounded-lg p-1 text-neutral-500 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-2.5">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Enabled</p>
+                      <p className="text-xs text-neutral-600 mt-0.5">Include this provider when resolving template placeholders.</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={form.sources[activeProviderDialog]?.enabled !== false}
+                      onChange={(e) => toggleProvider(activeProviderDialog, e.target.checked)}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-950/60 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Wildcards</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {activeIntegration.availableVariables.map((variable) => (
+                        <Badge key={variable} variant="default">{`{${variable}}`}</Badge>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[11px] text-neutral-600">Namespaced versions also work: {`{${activeProviderDialog}.variable}`} and {`{${activeProviderDialog}_variable}`}</p>
+                  </div>
+
+                  {activeIntegration.fields.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {activeIntegration.fields.map((field) => {
+                        const fieldValue = form.sources[activeProviderDialog]?.config?.[field.key] ?? field.defaultValue ?? "";
+                        const isCheckbox = field.inputType === "checkbox";
+                        const isTextarea = field.inputType === "textarea" || field.multiline;
+
+                        if (isCheckbox) {
+                          return (
+                            <div key={field.key} className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-2.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-xs font-medium text-neutral-300 uppercase tracking-wider">{field.label}</p>
+                                  {field.helpText && <p className="mt-1 text-xs text-neutral-600">{field.helpText}</p>}
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={fieldValue === "true"}
+                                  onChange={(e) => updateProviderConfig(activeProviderDialog, field.key, e.target.checked ? "true" : "false")}
+                                />
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (isTextarea) {
+                          return (
+                            <div key={field.key} className="md:col-span-2">
+                              <label htmlFor={`dlg-${activeProviderDialog}-${field.key}`} className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                                {field.label}
+                              </label>
+                              <textarea
+                                id={`dlg-${activeProviderDialog}-${field.key}`}
+                                rows={field.rows ?? 4}
+                                value={fieldValue}
+                                placeholder={field.placeholder}
+                                onChange={(e) => updateProviderConfig(activeProviderDialog, field.key, e.target.value)}
+                                className="mt-1 min-h-[110px] w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-neutral-950"
+                              />
+                              {field.helpText && <p className="mt-1.5 text-xs text-neutral-600">{field.helpText}</p>}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={field.key}>
+                            <Input
+                              id={`dlg-${activeProviderDialog}-${field.key}`}
+                              label={field.label}
+                              value={fieldValue}
+                              placeholder={field.placeholder}
+                              onChange={(e) => updateProviderConfig(activeProviderDialog, field.key, e.target.value)}
+                            />
+                            {field.helpText && <p className="mt-1.5 text-xs text-neutral-600">{field.helpText}</p>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-950/60 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Color Placeholders</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {COLOR_PLACEHOLDER_BADGES.map((token) => (
+                        <Badge key={`dlg-color-${token}`} variant="success">{token}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
 
       {editingWorkflow && (
         <p className="text-xs text-neutral-600 mt-3">Editing {editingWorkflow.name}</p>

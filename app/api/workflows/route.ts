@@ -37,8 +37,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Workflow schedule type is required" }, { status: 400 });
     }
 
+    const hasAnyDataSource = !!body.dataSource || (Array.isArray(body.dataSources) && body.dataSources.length > 0);
+
     let messageText = body.message.text;
-    if (!body.dataSource) {
+    if (!hasAnyDataSource) {
       const messageValidation = validateMessageText(body.message.text, "flagship");
       if (!messageValidation.valid) {
         return NextResponse.json({ error: messageValidation.error }, { status: 400 });
@@ -56,6 +58,7 @@ export async function POST(req: NextRequest) {
         colorInserts: body.message.colorInserts ?? [],
       },
       dataSource: body.dataSource ?? null,
+      dataSources: body.dataSources ?? (body.dataSource ? [body.dataSource] : []),
       schedule: body.schedule,
     });
 

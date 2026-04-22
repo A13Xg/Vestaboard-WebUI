@@ -22,10 +22,17 @@
         "timeHHMM": "09:00"
       },
       "createdAt": "2026-04-21T06:47:35.622Z",
-      "updatedAt": "2026-04-21T06:47:35.622Z",
-      "nextRunAt": "2026-04-21T16:00:00.000Z",
-      "lastRunAt": null,
-      "lastExecution": null
+      "updatedAt": "2026-04-22T04:44:28.585Z",
+      "nextRunAt": "2026-04-22T16:00:00.000Z",
+      "lastRunAt": "2026-04-22T04:44:28.585Z",
+      "lastExecution": {
+        "success": true,
+        "executedAt": "2026-04-22T04:44:28.585Z",
+        "renderedText": "LAS VEGAS WEATHER\n      TEMP: 68F",
+        "summary": "Message sent",
+        "triggerSource": "heartbeat",
+        "scheduledFor": "2026-04-21T16:00:00.000Z"
+      }
     },
     {
       "id": "wf-1776753913735-4y0vf3",
@@ -46,15 +53,15 @@
         "timeHHMM": "18:00"
       },
       "createdAt": "2026-04-21T06:45:13.735Z",
-      "updatedAt": "2026-04-21T06:50:58.923Z",
-      "nextRunAt": "2026-04-22T01:00:00.000Z",
-      "lastRunAt": "2026-04-21T06:50:58.923Z",
+      "updatedAt": "2026-04-22T04:44:31.036Z",
+      "nextRunAt": "2026-04-23T01:00:00.000Z",
+      "lastRunAt": "2026-04-22T04:44:31.036Z",
       "lastExecution": {
         "success": true,
-        "executedAt": "2026-04-21T06:50:58.923Z",
-        "renderedText": "WHAT'S 50 CENT'S NAME\n   IN ZIMBABWE? 200\n       DOLLARS.",
+        "executedAt": "2026-04-22T04:44:31.036Z",
+        "renderedText": "BAD AT GOLF? JOIN THE\n        CLUB.",
         "summary": "Message sent",
-        "triggerSource": "session-manual",
+        "triggerSource": "heartbeat",
         "scheduledFor": "2026-04-22T01:00:00.000Z"
       }
     },
@@ -79,16 +86,16 @@
         "timeHHMM": "00:00"
       },
       "createdAt": "2026-04-21T06:43:28.714Z",
-      "updatedAt": "2026-04-21T06:51:40.989Z",
-      "nextRunAt": "2026-04-21T07:00:00.000Z",
-      "lastRunAt": "2026-04-21T06:51:40.989Z",
+      "updatedAt": "2026-04-22T07:09:15.035Z",
+      "nextRunAt": "2026-04-23T07:00:00.000Z",
+      "lastRunAt": "2026-04-22T07:09:15.035Z",
       "lastExecution": {
         "success": true,
-        "executedAt": "2026-04-21T06:51:40.989Z",
-        "renderedText": "DIAGONAL R O Y",
+        "executedAt": "2026-04-22T07:09:15.035Z",
+        "renderedText": "B EXPLORE THE UNEXPECTED. R CREATE YOUR OWN. G LET IT FLOW.",
         "summary": "Message sent",
-        "triggerSource": "session-manual",
-        "scheduledFor": "2026-04-21T07:00:00.000Z"
+        "triggerSource": "heartbeat",
+        "scheduledFor": "2026-04-22T07:00:00.000Z"
       }
     }
   ]

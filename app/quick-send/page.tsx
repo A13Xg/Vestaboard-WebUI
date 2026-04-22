@@ -4,20 +4,19 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, RefreshCw, Send, X } from "lucide-react";
+import { ArrowLeft, RefreshCw, Send, X } from "lucide-react";
 import { BoardComposerEditor, BoardGrid } from "@/components/board";
 import { Button } from "@/components/ui";
 import { useBoardState } from "@/hooks/use-board-state";
 import { useSession } from "@/hooks/use-session";
+import { useBoardModel } from "@/hooks/use-board-model";
 import { boardApi } from "@/lib/api-client";
 import { emptyMatrix, matrixHasContent, matrixToPlainText, normalizeMatrixSize } from "@/lib/board-utils";
-import { BOARD_PROFILES } from "@/lib/board-model";
 import { toast } from "@/hooks/use-toast";
 import type { BoardMatrix } from "@/types";
 
 const BOARD_GAP = 2;
 const BOARD_FRAME_PADDING = 28;
-const NOTE_PROFILE = BOARD_PROFILES.note;
 
 function matricesMatch(left?: BoardMatrix | null, right?: BoardMatrix | null) {
   if (!left || !right) return false;
@@ -33,26 +32,30 @@ function sleep(ms: number) {
 function QuickSendBoard({
   matrix,
   loading,
+  rows,
+  cols,
 }: {
   matrix?: BoardMatrix;
   loading?: boolean;
+  rows: number;
+  cols: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(13);
 
   useEffect(() => {
-      const update = () => {
-        if (!containerRef.current) return;
-        const width = containerRef.current.clientWidth - BOARD_FRAME_PADDING;
-        const nextCell = Math.floor((width - (NOTE_PROFILE.cols - 1) * BOARD_GAP) / NOTE_PROFILE.cols);
-        setCellSize(Math.min(Math.max(nextCell, 13), 28));
-      };
+    const update = () => {
+      if (!containerRef.current) return;
+      const width = containerRef.current.clientWidth - BOARD_FRAME_PADDING;
+      const nextCell = Math.floor((width - (cols - 1) * BOARD_GAP) / cols);
+      setCellSize(Math.min(Math.max(nextCell, 13), 28));
+    };
 
     update();
     const observer = new ResizeObserver(update);
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [cols]);
 
   return (
     <div className="rounded-[28px] border border-neutral-800 bg-gradient-to-b from-neutral-900 to-neutral-950 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-5">
@@ -66,8 +69,8 @@ function QuickSendBoard({
         <div className="flex justify-center">
           <BoardGrid
             matrix={matrix}
-            rows={NOTE_PROFILE.rows}
-            cols={NOTE_PROFILE.cols}
+            rows={rows}
+            cols={cols}
             loading={loading}
             cellSize={cellSize}
           />
@@ -80,10 +83,43 @@ function QuickSendBoard({
 export default function QuickSendPage() {
   const router = useRouter();
   const { loading: sessionLoading, isAuthenticated } = useSession();
+  const { profile } = useBoardModel();
   const { display, syncing, refresh } = useBoardState({ enabled: isAuthenticated });
   const [composing, setComposing] = useState(false);
   const [sending, setSending] = useState(false);
-  const [composeMatrix, setComposeMatrix] = useState<BoardMatrix>(() => emptyMatrix(NOTE_PROFILE.rows, NOTE_PROFILE.cols));
+  const [composeMatrix, setComposeMatrix] = useState<BoardMatrix>(() => emptyMatrix(profile.rows, profile.cols));
+
+  useEffect(() => {
+    if (!composing) return;
+    if (typeof window === "undefined") return;
+
+    const startY = window.scrollY;
+    const targetY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const duration = 420;
+    const startTime = performance.now();
+    let rafId = 0;
+
+    const easeOutCubic = (value: number) => 1 - Math.pow(1 - value, 3);
+
+    const tick = (time: number) => {
+      const elapsed = time - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = easeOutCubic(progress);
+      const nextY = startY + (targetY - startY) * eased;
+
+      window.scrollTo({ top: nextY });
+
+      if (progress < 1) {
+        rafId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    rafId = window.requestAnimationFrame(tick);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [composing]);
 
   useEffect(() => {
     if (!sessionLoading && !isAuthenticated) {
@@ -91,9 +127,13 @@ export default function QuickSendPage() {
     }
   }, [isAuthenticated, router, sessionLoading]);
 
+  useEffect(() => {
+    setComposeMatrix((prev) => normalizeMatrixSize(prev, profile.rows, profile.cols));
+  }, [profile.rows, profile.cols]);
+
   const currentMatrix = useMemo(
-    () => normalizeMatrixSize(display.message?.matrix, NOTE_PROFILE.rows, NOTE_PROFILE.cols),
-    [display.message?.matrix],
+    () => normalizeMatrixSize(display.message?.matrix, profile.rows, profile.cols),
+    [display.message?.matrix, profile.rows, profile.cols],
   );
 
   async function confirmCurrentMessage(expectedMatrix: BoardMatrix) {
@@ -101,7 +141,7 @@ export default function QuickSendPage() {
       const current = await boardApi.current();
       const currentMatrix = current.error
         ? null
-        : normalizeMatrixSize(current.data.message?.matrix, NOTE_PROFILE.rows, NOTE_PROFILE.cols);
+        : normalizeMatrixSize(current.data.message?.matrix, profile.rows, profile.cols);
       if (!current.error && matricesMatch(currentMatrix, expectedMatrix)) {
         await refresh();
         toast("Message sent successfully", "success");
@@ -117,12 +157,12 @@ export default function QuickSendPage() {
   }
 
   function resetComposer() {
-    setComposeMatrix(emptyMatrix(NOTE_PROFILE.rows, NOTE_PROFILE.cols));
+    setComposeMatrix(emptyMatrix(profile.rows, profile.cols));
     setComposing(false);
   }
 
   async function handleSend() {
-    const normalizedDraft = normalizeMatrixSize(composeMatrix, NOTE_PROFILE.rows, NOTE_PROFILE.cols);
+    const normalizedDraft = normalizeMatrixSize(composeMatrix, profile.rows, profile.cols);
     if (!matrixHasContent(normalizedDraft)) {
       toast("Cannot send an empty board", "warning");
       return;
@@ -133,7 +173,7 @@ export default function QuickSendPage() {
     const sent = await boardApi.send({
       text: matrixToPlainText(normalizedDraft),
       matrix: normalizedDraft,
-      boardModel: "note",
+      boardModel: profile.key,
       submittedBy: "quick-send",
     });
 
@@ -185,7 +225,7 @@ export default function QuickSendPage() {
           </h1>
         </div>
 
-        <QuickSendBoard matrix={currentMatrix} loading={syncing} />
+        <QuickSendBoard matrix={currentMatrix} loading={syncing} rows={profile.rows} cols={profile.cols} />
 
         <motion.div layout>
           <AnimatePresence initial={false} mode="popLayout">
@@ -231,11 +271,11 @@ export default function QuickSendPage() {
                 </div>
 
                 <div className="space-y-4 p-4">
-                  <QuickSendBoard matrix={composeMatrix} />
+                  <QuickSendBoard matrix={composeMatrix} rows={profile.rows} cols={profile.cols} />
                   <BoardComposerEditor
                     matrix={composeMatrix}
-                    rows={NOTE_PROFILE.rows}
-                    cols={NOTE_PROFILE.cols}
+                    rows={profile.rows}
+                    cols={profile.cols}
                     onChange={setComposeMatrix}
                   />
 
@@ -243,8 +283,13 @@ export default function QuickSendPage() {
                     <Button type="button" variant="outline" size="lg" onClick={resetComposer}>
                       Cancel
                     </Button>
-                    <Button type="button" size="lg" loading={sending} onClick={() => void handleSend()}>
-                      <CheckCircle2 className="h-4 w-4" />
+                    <Button
+                      type="button"
+                      size="lg"
+                      className="whitespace-nowrap text-sm sm:text-base"
+                      loading={sending}
+                      onClick={() => void handleSend()}
+                    >
                       Send Message
                     </Button>
                   </div>

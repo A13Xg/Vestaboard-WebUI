@@ -11,6 +11,13 @@ export const WORKFLOW_INTEGRATIONS: WorkflowIntegrationDefinition[] = [
     availableVariables: ["location", "tempDeg", "tempDegF", "condition", "conditionIconSymbol", "windKph"],
     fields: [
       { key: "location", label: "Location", placeholder: "Los Angeles, CA", defaultValue: "Los Angeles" },
+      {
+        key: "units",
+        label: "Use Fahrenheit",
+        defaultValue: "false",
+        helpText: "When enabled, {tempDeg} resolves to F. {tempDegF} is always available.",
+        inputType: "checkbox",
+      },
     ],
   },
   {
@@ -79,10 +86,19 @@ export const WORKFLOW_INTEGRATIONS: WorkflowIntegrationDefinition[] = [
     description: "Formatted date and time for any timezone.",
     category: "system",
     priority: "public",
-    defaultTemplate: "{timezoneLabel} {time} {date}",
-    availableVariables: ["timezone", "timezoneLabel", "time", "date"],
+    defaultTemplate: "{location} {weekDay} {monthWord} {day} {time}",
+    availableVariables: ["location", "timezone", "timezoneLabel", "locale", "monthWord", "month", "day", "weekDay", "year", "hour", "min", "sec", "time", "date"],
     fields: [
+      { key: "location", label: "Location Label", placeholder: "Los Angeles", defaultValue: "Los Angeles" },
       { key: "timezone", label: "Timezone", placeholder: "America/Los_Angeles", defaultValue: "America/Los_Angeles" },
+      { key: "locale", label: "Locale", placeholder: "en-US", defaultValue: "en-US" },
+      {
+        key: "use24Hour",
+        label: "Use 24-hour Clock",
+        defaultValue: "true",
+        helpText: "When disabled, hour/time are formatted using 12-hour clock.",
+        inputType: "checkbox",
+      },
     ],
   },
   {
@@ -112,6 +128,14 @@ export const WORKFLOW_INTEGRATIONS: WorkflowIntegrationDefinition[] = [
         helpText: "This prompt is sent to the Gemma API. Keep it specific so the response stays concise.",
         multiline: true,
         rows: 5,
+        inputType: "textarea",
+      },
+      {
+        key: "randomTemperature",
+        label: "Random Temperature",
+        defaultValue: "false",
+        helpText: "Jitters temperature per run in a safe range to improve response variety.",
+        inputType: "checkbox",
       },
     ],
   },

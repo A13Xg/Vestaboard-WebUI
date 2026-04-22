@@ -40,7 +40,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
 
     const resultingDataSource = patch.dataSource !== undefined ? patch.dataSource : existing.dataSource;
-    if (patch.message?.text !== undefined && !resultingDataSource) {
+    const resultingDataSources = patch.dataSources !== undefined
+      ? patch.dataSources
+      : (existing.dataSources ?? (existing.dataSource ? [existing.dataSource] : []));
+    const hasAnyDataSource = !!resultingDataSource || (Array.isArray(resultingDataSources) && resultingDataSources.length > 0);
+
+    if (patch.message?.text !== undefined && !hasAnyDataSource) {
       const messageValidation = validateMessageText(patch.message.text, "flagship");
       if (!messageValidation.valid) {
         return NextResponse.json({ error: messageValidation.error }, { status: 400 });

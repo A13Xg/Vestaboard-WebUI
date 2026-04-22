@@ -116,6 +116,7 @@ export async function createWorkflow(input: WorkflowCreateRequest): Promise<Work
       enabled: !!input.enabled,
       message: input.message,
       dataSource: input.dataSource ?? null,
+      dataSources: input.dataSources ?? (input.dataSource ? [input.dataSource] : []),
       schedule: input.schedule,
       createdAt: now,
       updatedAt: now,
@@ -142,6 +143,9 @@ export async function updateWorkflow(id: string, patch: WorkflowUpdateRequest): 
       message: patch.message ? { ...current.message, ...patch.message } : current.message,
       schedule: patch.schedule ? { ...current.schedule, ...patch.schedule } : current.schedule,
       dataSource: patch.dataSource !== undefined ? patch.dataSource : current.dataSource,
+      dataSources: patch.dataSources !== undefined
+        ? patch.dataSources
+        : (current.dataSources ?? (current.dataSource ? [current.dataSource] : [])),
       updatedAt: new Date().toISOString(),
     };
 
@@ -181,11 +185,13 @@ async function executeWorkflow(
     triggerSource,
     scheduledFor,
     providerId: workflow.dataSource?.providerId ?? "manual",
+    providerCount: workflow.dataSources?.length ?? (workflow.dataSource ? 1 : 0),
   });
 
   try {
     const preview = await buildWorkflowPreview(workflow.message.text, workflow.dataSource ?? null, {
       alignment: workflow.message.alignment,
+      dataSources: workflow.dataSources,
     });
     logWorkflowStore("execute.preview", {
       workflowId: workflow.id,
