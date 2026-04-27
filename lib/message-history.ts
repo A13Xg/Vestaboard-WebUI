@@ -16,7 +16,6 @@ const EMPTY_HISTORY: MessageHistoryFile = {
  * survives hot-reloads in Next.js dev mode, preventing concurrent writes from racing.
  */
 declare global {
-  // eslint-disable-next-line no-var
   var __messageHistoryWrite: Promise<void> | undefined;
 }
 

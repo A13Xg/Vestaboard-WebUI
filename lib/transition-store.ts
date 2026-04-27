@@ -10,7 +10,6 @@ const DEFAULT_TRANSITION: VestaboardTransition = {
 };
 
 declare global {
-  // eslint-disable-next-line no-var
   var __transitionWriteQueue: Promise<void> | undefined;
 }
 

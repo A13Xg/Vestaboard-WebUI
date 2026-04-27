@@ -1,9 +1,4 @@
-import type { WorkflowSchedule, WorkflowScheduleType } from "@/types";
-
-/** Zero-pads a number to at least 2 digits. */
-function pad(n: number) {
-  return n.toString().padStart(2, "0");
-}
+import type { WorkflowSchedule } from "@/types";
 
 /** Truncates seconds and milliseconds so comparisons are always minute-aligned. */
 function startOfMinute(date: Date) {

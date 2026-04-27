@@ -128,6 +128,7 @@ export default function QuickSendPage() {
   }, [isAuthenticated, router, sessionLoading]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setComposeMatrix((prev) => normalizeMatrixSize(prev, profile.rows, profile.cols));
   }, [profile.rows, profile.cols]);
 

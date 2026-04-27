@@ -23,6 +23,7 @@ export function PresetEditorDialog({ open, mode, initialPreset, onClose, onSave,
   useEffect(() => {
     if (!open) return;
     if (initialPreset) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLabel(initialPreset.label);
       setText(initialPreset.text);
       setAlignment(initialPreset.alignment ?? "center");

@@ -41,9 +41,9 @@ async function request<T>(
     });
 
     const rawText = await res.text();
-    let json: any = null;
+    let json: Record<string, unknown> | null = null;
     try {
-      json = rawText ? JSON.parse(rawText) : {};
+      json = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {};
     } catch {
       json = { raw: rawText };
     }
@@ -59,7 +59,7 @@ async function request<T>(
       pushClientLog("error", `${method} ${url} failed`, detail || "Request failed");
       return {
         data: null,
-        error: { error: json.error ?? `Request failed (${res.status})`, code: String(res.status) },
+        error: { error: typeof json?.error === "string" ? json.error : `Request failed (${res.status})`, code: String(res.status) },
       };
     }
 

@@ -30,12 +30,14 @@ export function ComposeDrawer({ open, onClose, initialText = "", initialMatrix, 
   const [applyingTransition, setApplyingTransition] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setComposeMatrix((prev) => normalizeMatrixSize(prev, profile.rows, profile.cols));
   }, [profile.rows, profile.cols]);
 
   useEffect(() => {
     if (!open) return;
     if (initialMatrix && initialMatrix.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setComposeMatrix(normalizeMatrixSize(initialMatrix, profile.rows, profile.cols));
       return;
     }

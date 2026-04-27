@@ -10,15 +10,14 @@ import {
 } from "@/lib/board-model";
 
 export function useBoardModel() {
-  const [model, setModelState] = useState<BoardModel>("flagship");
+  const [model, setModelState] = useState<BoardModel>(() => {
+    if (typeof window === "undefined") return "flagship";
+    const raw = window.localStorage.getItem(BOARD_MODEL_STORAGE_KEY);
+    return isBoardModel(raw) ? raw : "flagship";
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const raw = window.localStorage.getItem(BOARD_MODEL_STORAGE_KEY);
-    if (isBoardModel(raw)) {
-      setModelState(raw);
-    }
-
     const onStorage = (e: StorageEvent) => {
       if (e.key !== BOARD_MODEL_STORAGE_KEY) return;
       if (isBoardModel(e.newValue)) setModelState(e.newValue);
