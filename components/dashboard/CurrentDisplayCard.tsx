@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { RefreshCw, Clock, Wifi, WifiOff } from "lucide-react";
-import { Card, CardContent, Badge } from "@/components/ui";
+import { Card, Badge } from "@/components/ui";
 import { Button } from "@/components/ui";
 import { BoardPreview } from "@/components/board";
 import { formatRelativeTime } from "@/lib/utils";

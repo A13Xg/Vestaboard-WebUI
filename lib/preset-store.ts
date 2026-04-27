@@ -12,7 +12,6 @@ const PRESET_FILE_PATH = path.join(process.cwd(), "data", "presets.json");
 const PRESET_DIR_PATH = path.dirname(PRESET_FILE_PATH);
 
 declare global {
-  // eslint-disable-next-line no-var
   var __presetWriteQueue: Promise<void> | undefined;
 }
 
@@ -56,7 +55,6 @@ async function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
     .catch(run);
 
   await global.__presetWriteQueue;
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return out!;
 }
 

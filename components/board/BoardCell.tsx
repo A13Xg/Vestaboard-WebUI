@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { COLOR_MAP, BOARD_CELL_DEFAULT } from "@/config";
+import { COLOR_MAP } from "@/config";
 import { codeToChar } from "@/lib/board-utils";
 
 interface BoardCellProps {

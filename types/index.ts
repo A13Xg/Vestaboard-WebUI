@@ -76,7 +76,7 @@ export interface ColorInsert {
   color: BoardColor;
 }
 
-export interface PreviewRequest extends ComposeRequest {}
+export type PreviewRequest = ComposeRequest;
 
 export interface PreviewResponse {
   matrix: BoardMatrix;

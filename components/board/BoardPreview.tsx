@@ -80,6 +80,7 @@ export function BoardPreview({ matrix, loading, className, boardModel, cellSize:
 
   // Re-trigger transition animation when message or settings change.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAnimationSeed((prev) => prev + 1);
   }, [matrix, transition, transitionSpeed]);
 

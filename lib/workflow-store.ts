@@ -31,7 +31,6 @@ interface WorkflowExecutionContext {
  * funnel through `withWriteLock` to guarantee sequential, non-overlapping writes.
  */
 declare global {
-  // eslint-disable-next-line no-var
   var __workflowWriteQueue: Promise<void> | undefined;
 }
 

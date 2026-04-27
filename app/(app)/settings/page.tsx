@@ -86,6 +86,7 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshConnectivityAndBoard();
     boardApi.getTransition().then((result) => {
       if (!result.error) setTransition(result.data);
