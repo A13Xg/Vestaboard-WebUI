@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { COLOR_MAP } from "@/config";
-import type { BoardMatrix } from "@/types";
+import type { BoardMatrix, TextAlignment } from "@/types";
 import { charToCode, codeToChar, normalizeMatrixSize } from "@/lib/board-utils";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,8 @@ interface BoardComposerEditorProps {
   rows: number;
   cols: number;
   onChange: (matrix: BoardMatrix) => void;
+  alignment?: TextAlignment;
+  onAlignmentChange?: (alignment: TextAlignment) => void;
   className?: string;
 }
 
@@ -34,7 +37,7 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-export function BoardComposerEditor({ matrix, rows, cols, onChange, className }: BoardComposerEditorProps) {
+export function BoardComposerEditor({ matrix, rows, cols, onChange, alignment = "left", onAlignmentChange, className }: BoardComposerEditorProps) {
   const normalized = useMemo(() => normalizeMatrixSize(matrix, rows, cols), [matrix, rows, cols]);
   const [selected, setSelected] = useState({ row: 0, col: 0 });
   const [inputError, setInputError] = useState<string | null>(null);
@@ -156,13 +159,38 @@ export function BoardComposerEditor({ matrix, rows, cols, onChange, className }:
 
       <div className="flex items-center justify-between gap-2 text-[11px] text-neutral-500">
         <span>Selected: R{selected.row + 1} C{selected.col + 1}</span>
-        <button
-          type="button"
-          onClick={() => applyAt(selected.row, selected.col, 0, false)}
-          className="rounded px-2 py-1 border border-neutral-700 hover:border-neutral-600 hover:text-neutral-300"
-        >
-          Clear Cell
-        </button>
+        <div className="flex items-center gap-1">
+          {onAlignmentChange && (
+            <div className="flex items-center gap-0.5 mr-1 border border-neutral-700 rounded p-0.5">
+              {(["left", "center", "right"] as TextAlignment[]).map((a) => {
+                const Icon = a === "left" ? AlignLeft : a === "center" ? AlignCenter : AlignRight;
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => onAlignmentChange(a)}
+                    title={`Align ${a}`}
+                    className={cn(
+                      "rounded px-1.5 py-0.5 transition-colors",
+                      alignment === a
+                        ? "bg-indigo-600/70 text-indigo-200"
+                        : "text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800"
+                    )}
+                  >
+                    <Icon className="w-3 h-3" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => applyAt(selected.row, selected.col, 0, false)}
+            className="rounded px-2 py-1 border border-neutral-700 hover:border-neutral-600 hover:text-neutral-300"
+          >
+            Clear Cell
+          </button>
+        </div>
       </div>
 
       {inputError && (

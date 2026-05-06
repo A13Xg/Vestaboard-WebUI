@@ -11,8 +11,11 @@ import type { CurrentDisplayResponse, VestaboardTransition } from "@/types";
 import { pushClientLog } from "@/lib/client-logger";
 import { useBoardModel } from "@/hooks/use-board-model";
 import { toast } from "@/hooks/use-toast";
+import { fitTextToBoard } from "@/lib/board-utils";
 
 const DEFAULT_TRANSITION: VestaboardTransition = { transition: "classic", transitionSpeed: "gentle" };
+const INITIAL_CONNECTION_SENT_KEY = "vestaboard.initialConnectionSent.v1";
+const TEST_MESSAGE_TEXT = "Vestaboard\nSuccessfully\nConnected!";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -50,6 +53,34 @@ export default function SettingsPage() {
   const [currentDisplay, setCurrentDisplay] = useState<CurrentDisplayResponse | null>(null);
   const [transition, setTransition] = useState<VestaboardTransition>(DEFAULT_TRANSITION);
   const [applyingTransition, setApplyingTransition] = useState(false);
+  const [sendingTestMessage, setSendingTestMessage] = useState(false);
+
+  async function sendTestMessage() {
+    setSendingTestMessage(true);
+    try {
+      const conn = await boardApi.connectivity();
+      if (conn.error || !conn.data.connected) {
+        toast("Vestaboard is not connected", "error");
+        return;
+      }
+      const centered = fitTextToBoard(TEST_MESSAGE_TEXT, "note", { alignment: "center" });
+      const sent = await boardApi.send({
+        text: TEST_MESSAGE_TEXT,
+        matrix: centered.matrix,
+        boardModel: "note",
+        alignment: "center",
+        submittedBy: "test-message",
+      });
+      if (sent.error || !sent.data.success) {
+        toast(sent.error?.error ?? "Failed to send test message", "error");
+        return;
+      }
+      window.localStorage.setItem(INITIAL_CONNECTION_SENT_KEY, "1");
+      toast("Test message sent to Vestaboard", "success");
+    } finally {
+      setSendingTestMessage(false);
+    }
+  }
 
   async function refreshConnectivityAndBoard() {
     const conn = await boardApi.connectivity();
@@ -66,6 +97,11 @@ export default function SettingsPage() {
     }
 
     pushClientLog("success", "Vestaboard API key validated", `HTTP ${conn.data.statusCode}`);
+
+    // Auto-send the test message on first ever successful connection
+    if (typeof window !== "undefined" && window.localStorage.getItem(INITIAL_CONNECTION_SENT_KEY) !== "1") {
+      void sendTestMessage();
+    }
     const current = await boardApi.current();
     if (current.error) {
       pushClientLog("error", "Current board fetch failed", current.error.error);
@@ -141,8 +177,16 @@ export default function SettingsPage() {
                   {currentDisplay?.message?.text || currentDisplay?.message?.label || "No live message text available"}
                 </span>
               </SettingsRow>
-              <div className="pt-2">
+              <div className="pt-2 flex gap-2 flex-wrap">
                 <Button variant="secondary" size="sm" onClick={refreshConnectivityAndBoard}>Re-validate and fetch current</Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={sendTestMessage}
+                  disabled={sendingTestMessage || !connectivity?.connected}
+                >
+                  {sendingTestMessage ? "Sending..." : "Send Test Message"}
+                </Button>
               </div>
               {connectivity?.reason && (
                 <p className="text-xs text-amber-400 mt-2">{connectivity.reason}</p>

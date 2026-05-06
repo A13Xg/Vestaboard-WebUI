@@ -6,9 +6,9 @@ import { Drawer } from "@/components/overlays";
 import { Button } from "@/components/ui";
 import { BoardComposerEditor, BoardPreview, TransitionSelector } from "@/components/board";
 import { boardApi } from "@/lib/api-client";
-import { emptyMatrix, matrixHasContent, matrixToPlainText, normalizeMatrixSize, textToMatrix } from "@/lib/board-utils";
+import { emptyMatrix, fitTextToBoard, matrixHasContent, matrixToPlainText, normalizeMatrixSize, textToMatrix } from "@/lib/board-utils";
 import { toast } from "@/hooks/use-toast";
-import type { BoardMatrix, VestaboardTransition } from "@/types";
+import type { BoardMatrix, VestaboardTransition, TextAlignment } from "@/types";
 import { useBoardModel } from "@/hooks/use-board-model";
 
 const DEFAULT_TRANSITION: VestaboardTransition = { transition: "classic", transitionSpeed: "gentle" };
@@ -24,6 +24,7 @@ interface ComposeDrawerProps {
 export function ComposeDrawer({ open, onClose, initialText = "", initialMatrix, onSend }: ComposeDrawerProps) {
   const { profile } = useBoardModel();
   const [sending, setSending] = useState(false);
+  const [alignment, setAlignment] = useState<TextAlignment>("left");
   const [composeMatrix, setComposeMatrix] = useState<BoardMatrix>(() => textToMatrix(initialText, profile.rows, profile.cols));
   const [transition, setTransition] = useState<VestaboardTransition>(DEFAULT_TRANSITION);
   const [transitionExpanded, setTransitionExpanded] = useState(false);
@@ -42,6 +43,7 @@ export function ComposeDrawer({ open, onClose, initialText = "", initialMatrix, 
       return;
     }
     setComposeMatrix(textToMatrix(initialText, profile.rows, profile.cols));
+    setAlignment("left");
   }, [open, initialText, initialMatrix, profile.rows, profile.cols]);
 
   // Load current transition settings when drawer opens
@@ -54,7 +56,16 @@ export function ComposeDrawer({ open, onClose, initialText = "", initialMatrix, 
 
   const clearAll = () => {
     setComposeMatrix(emptyMatrix(profile.rows, profile.cols));
+    setAlignment("left");
   };
+
+  function handleAlignmentChange(newAlignment: TextAlignment) {
+    setAlignment(newAlignment);
+    const text = matrixToPlainText(composeMatrix);
+    if (!text.trim()) return;
+    const result = fitTextToBoard(text, profile.key, { alignment: newAlignment });
+    setComposeMatrix(result.matrix);
+  }
 
   const clearBoardNow = async () => {
     const blank = emptyMatrix(profile.rows, profile.cols);
@@ -93,6 +104,7 @@ export function ComposeDrawer({ open, onClose, initialText = "", initialMatrix, 
       text: matrixToPlainText(composeMatrix),
       matrix: composeMatrix,
       boardModel: profile.key,
+      alignment,
       submittedBy: "compose-drawer",
     });
     if (result.error === null) {
@@ -125,6 +137,8 @@ export function ComposeDrawer({ open, onClose, initialText = "", initialMatrix, 
             rows={profile.rows}
             cols={profile.cols}
             onChange={setComposeMatrix}
+            alignment={alignment}
+            onAlignmentChange={handleAlignmentChange}
           />
           <p className="text-[11px] text-neutral-600 mt-2">
             Type directly into cells. Arrow keys move, Backspace/Delete clear, and colors apply to the selected cell.

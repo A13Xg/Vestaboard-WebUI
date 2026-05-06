@@ -13,12 +13,10 @@ import { useBoardModel } from "@/hooks/use-board-model";
 import { boardApi } from "@/lib/api-client";
 import { emptyMatrix, fitTextToBoard, matrixHasContent, matrixToPlainText, normalizeMatrixSize } from "@/lib/board-utils";
 import { toast } from "@/hooks/use-toast";
-import type { BoardMatrix } from "@/types";
+import type { BoardMatrix, TextAlignment } from "@/types";
 
 const BOARD_GAP = 2;
 const BOARD_FRAME_PADDING = 28;
-const INITIAL_CONNECTION_SENT_KEY = "vestaboard.initialConnectionSent.v1";
-const INITIAL_CONNECTION_TEXT = "Vestaboard\nSuccessfully\nConnected!";
 
 function matricesMatch(left?: BoardMatrix | null, right?: BoardMatrix | null) {
   if (!left || !right) return false;
@@ -89,6 +87,7 @@ export default function QuickSendPage() {
   const { display, syncing, refresh } = useBoardState({ enabled: isAuthenticated });
   const [composing, setComposing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [alignment, setAlignment] = useState<TextAlignment>("left");
   const [composeMatrix, setComposeMatrix] = useState<BoardMatrix>(() => emptyMatrix(profile.rows, profile.cols));
 
   useEffect(() => {
@@ -130,41 +129,6 @@ export default function QuickSendPage() {
   }, [isAuthenticated, router, sessionLoading]);
 
   useEffect(() => {
-    if (sessionLoading || !isAuthenticated) return;
-    if (typeof window === "undefined") return;
-    if (window.localStorage.getItem(INITIAL_CONNECTION_SENT_KEY) === "1") return;
-
-    let cancelled = false;
-
-    const sendInitialConnectionMessage = async () => {
-      const conn = await boardApi.connectivity();
-      if (cancelled || conn.error || !conn.data.connected) return;
-
-      const centered = fitTextToBoard(INITIAL_CONNECTION_TEXT, "note", { alignment: "center" });
-      const sent = await boardApi.send({
-        text: INITIAL_CONNECTION_TEXT,
-        matrix: centered.matrix,
-        boardModel: "note",
-        alignment: "center",
-        submittedBy: "initial-connection",
-      });
-
-      if (cancelled || sent.error || !sent.data.success) return;
-
-      window.localStorage.setItem(INITIAL_CONNECTION_SENT_KEY, "1");
-      await refresh();
-      toast("Vestaboard Successfully Connected message sent", "success");
-    };
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void sendInitialConnectionMessage();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated, refresh, sessionLoading]);
-
-  useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setComposeMatrix((prev) => normalizeMatrixSize(prev, profile.rows, profile.cols));
   }, [profile.rows, profile.cols]);
@@ -196,7 +160,16 @@ export default function QuickSendPage() {
 
   function resetComposer() {
     setComposeMatrix(emptyMatrix(profile.rows, profile.cols));
+    setAlignment("left");
     setComposing(false);
+  }
+
+  function handleAlignmentChange(newAlignment: TextAlignment) {
+    setAlignment(newAlignment);
+    const text = matrixToPlainText(composeMatrix);
+    if (!text.trim()) return;
+    const result = fitTextToBoard(text, profile.key, { alignment: newAlignment });
+    setComposeMatrix(result.matrix);
   }
 
   async function handleSend() {
@@ -212,6 +185,7 @@ export default function QuickSendPage() {
       text: matrixToPlainText(normalizedDraft),
       matrix: normalizedDraft,
       boardModel: profile.key,
+      alignment,
       submittedBy: "quick-send",
     });
 
@@ -315,6 +289,8 @@ export default function QuickSendPage() {
                     rows={profile.rows}
                     cols={profile.cols}
                     onChange={setComposeMatrix}
+                    alignment={alignment}
+                    onAlignmentChange={handleAlignmentChange}
                   />
 
                   <div className="grid grid-cols-2 gap-3">
