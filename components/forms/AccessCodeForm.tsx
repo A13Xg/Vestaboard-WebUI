@@ -28,7 +28,7 @@ export function AccessCodeForm() {
     setError(null);
     const result = await authApi.login(values);
     if (result.error === null && result.data.success) {
-      router.push(ROUTES.dashboard);
+      router.push(ROUTES.quickSend);
     } else {
       setError(result.data?.error ?? result.error?.error ?? "Invalid access code");
     }

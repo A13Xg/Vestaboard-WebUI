@@ -11,12 +11,14 @@ import { useBoardState } from "@/hooks/use-board-state";
 import { useSession } from "@/hooks/use-session";
 import { useBoardModel } from "@/hooks/use-board-model";
 import { boardApi } from "@/lib/api-client";
-import { emptyMatrix, matrixHasContent, matrixToPlainText, normalizeMatrixSize } from "@/lib/board-utils";
+import { emptyMatrix, fitTextToBoard, matrixHasContent, matrixToPlainText, normalizeMatrixSize } from "@/lib/board-utils";
 import { toast } from "@/hooks/use-toast";
 import type { BoardMatrix } from "@/types";
 
 const BOARD_GAP = 2;
 const BOARD_FRAME_PADDING = 28;
+const INITIAL_CONNECTION_SENT_KEY = "vestaboard.initialConnectionSent.v1";
+const INITIAL_CONNECTION_TEXT = "Vestaboard\nSuccessfully\nConnected!";
 
 function matricesMatch(left?: BoardMatrix | null, right?: BoardMatrix | null) {
   if (!left || !right) return false;
@@ -126,6 +128,41 @@ export default function QuickSendPage() {
       router.replace("/login");
     }
   }, [isAuthenticated, router, sessionLoading]);
+
+  useEffect(() => {
+    if (sessionLoading || !isAuthenticated) return;
+    if (typeof window === "undefined") return;
+    if (window.localStorage.getItem(INITIAL_CONNECTION_SENT_KEY) === "1") return;
+
+    let cancelled = false;
+
+    const sendInitialConnectionMessage = async () => {
+      const conn = await boardApi.connectivity();
+      if (cancelled || conn.error || !conn.data.connected) return;
+
+      const centered = fitTextToBoard(INITIAL_CONNECTION_TEXT, "note", { alignment: "center" });
+      const sent = await boardApi.send({
+        text: INITIAL_CONNECTION_TEXT,
+        matrix: centered.matrix,
+        boardModel: "note",
+        alignment: "center",
+        submittedBy: "initial-connection",
+      });
+
+      if (cancelled || sent.error || !sent.data.success) return;
+
+      window.localStorage.setItem(INITIAL_CONNECTION_SENT_KEY, "1");
+      await refresh();
+      toast("Vestaboard Successfully Connected message sent", "success");
+    };
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void sendInitialConnectionMessage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, refresh, sessionLoading]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

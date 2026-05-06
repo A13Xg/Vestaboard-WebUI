@@ -11,9 +11,9 @@ import {
 
 export function useBoardModel() {
   const [model, setModelState] = useState<BoardModel>(() => {
-    if (typeof window === "undefined") return "flagship";
+    if (typeof window === "undefined") return "note";
     const raw = window.localStorage.getItem(BOARD_MODEL_STORAGE_KEY);
-    return isBoardModel(raw) ? raw : "flagship";
+    return isBoardModel(raw) ? raw : "note";
   });
 
   useEffect(() => {
