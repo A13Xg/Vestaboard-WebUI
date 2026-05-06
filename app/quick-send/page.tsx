@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, RefreshCw, Send, X } from "lucide-react";
+import { ArrowLeft, Ban, RefreshCw, Send, X } from "lucide-react";
 import { BoardComposerEditor, BoardGrid } from "@/components/board";
 import { Button } from "@/components/ui";
 import { useBoardState } from "@/hooks/use-board-state";
@@ -164,6 +164,25 @@ export default function QuickSendPage() {
     setComposing(false);
   }
 
+  async function handleClearBoard() {
+    const blank = emptyMatrix(profile.rows, profile.cols);
+    setSending(true);
+    const result = await boardApi.send({
+      text: "",
+      matrix: blank,
+      boardModel: profile.key,
+      submittedBy: "quick-send-clear-board",
+    });
+    if (result.error === null) {
+      await refresh();
+      toast("Board cleared", "success");
+      resetComposer();
+    } else {
+      toast(result.error.error, "error");
+    }
+    setSending(false);
+  }
+
   function handleAlignmentChange(newAlignment: TextAlignment) {
     setAlignment(newAlignment);
     const text = matrixToPlainText(composeMatrix);
@@ -293,7 +312,11 @@ export default function QuickSendPage() {
                     onAlignmentChange={handleAlignmentChange}
                   />
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    <Button type="button" variant="destructive" size="lg" onClick={() => void handleClearBoard()} loading={sending}>
+                      <Ban className="h-4 w-4" />
+                      Clear Board
+                    </Button>
                     <Button type="button" variant="outline" size="lg" onClick={resetComposer}>
                       Cancel
                     </Button>
