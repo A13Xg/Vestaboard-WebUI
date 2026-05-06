@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { AppLogo } from "@/components/images/AppLogo";
 import {
   LayoutDashboard,
   PenLine,
@@ -11,7 +12,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Zap,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,9 +39,7 @@ export function Sidebar() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className={cn("flex items-center px-4 py-5 gap-3", !open && "justify-center px-0")}>
-        <div className="shrink-0 w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-900/40">
-          <Zap className="w-4 h-4 text-white" />
-        </div>
+        <AppLogo className="shrink-0 w-8 h-8 shadow-lg shadow-black/40" />
         <AnimatePresence>
           {open && (
             <motion.div

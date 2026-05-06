@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
-import { Zap, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { AppLogo } from "@/components/images/AppLogo";
 import { Input, Button } from "@/components/ui";
 import { loginSchema, type LoginFormValues } from "@/lib/schemas";
 import { authApi } from "@/lib/api-client";
@@ -42,9 +43,7 @@ export function AccessCodeForm() {
         transition={{ duration: 0.4 }}
         className="flex flex-col items-center mb-10"
       >
-        <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center mb-4 shadow-xl shadow-indigo-900/40">
-          <Zap className="w-7 h-7 text-white" />
-        </div>
+        <AppLogo className="w-14 h-14 mb-4 shadow-xl shadow-black/40" priority />
         <h1 className="text-2xl font-bold text-neutral-100 tracking-tight">{APP_NAME}</h1>
         <p className="text-sm text-neutral-500 mt-1">{APP_TAGLINE}</p>
       </motion.div>

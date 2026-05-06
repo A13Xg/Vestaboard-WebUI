@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Menu, RefreshCw, Bell } from "lucide-react";
 import { motion } from "framer-motion";
+import { AppLogo } from "@/components/images/AppLogo";
 import { useSidebar } from "@/components/layout/SidebarContext";
 import { Button } from "@/components/ui";
 import { useIsMobile } from "@/hooks/use-media-query";
@@ -55,7 +56,10 @@ export function HeaderBar({ title, onRefresh, syncing }: HeaderBarProps) {
 
       <div className="flex-1 flex items-center gap-2">
         {isMobile && (
-          <span className="text-sm font-semibold text-neutral-100">{APP_NAME}</span>
+          <>
+            <AppLogo className="w-6 h-6 shrink-0 shadow-md shadow-black/30" />
+            <span className="text-sm font-semibold text-neutral-100">{APP_NAME}</span>
+          </>
         )}
         {title && !isMobile && (
           <span className="text-sm text-neutral-400">{title}</span>
