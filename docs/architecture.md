@@ -20,8 +20,19 @@ Browser
 Iron Session stores a single `isAuthenticated` boolean in an encrypted, signed cookie. There are no user accounts — a single shared `ACCESS_CODE` environment variable acts as the passphrase.
 
 - `lib/server-auth.ts` exports `requireSession()` — all protected API routes call this first.
-- `app/api/auth/login/route.ts` uses a constant-time string comparison that pads both inputs to the same length before XOR-comparing, preventing both timing attacks and length oracle leaks. A 400 ms artificial delay on failure further slows brute-force attempts.
-- Session cookies are configured with `httpOnly`, `secure`, and `sameSite: lax`.
+- `app/api/auth/login/route.ts` validates the submitted code with a constant-time comparison (`timingSafeEqual`) that pads both strings to the same maximum length before XOR-comparing every character, preventing both timing attacks and length oracle leaks. A 400 ms artificial delay is applied on every failed attempt to slow brute-force attacks.
+- On success, iron-session writes an encrypted, tamper-proof session cookie named `vestaboard_session`.
+
+### Session Cookie Configuration (`config/session.ts`)
+
+| Property | Value |
+|---|---|
+| `httpOnly` | `true` — JavaScript cannot read the cookie |
+| `sameSite` | `lax` — sent on same-site requests and top-level GET navigations |
+| `maxAge` | 86 400 s (24 hours) |
+| `secure` | `true` when `NODE_ENV === "production"` and `SECURE_COOKIES !== "false"` |
+
+The `secure` flag is enabled for all production contexts by default (Vercel, Docker, reverse-proxied HTTPS). Set `SECURE_COOKIES=false` only when you need to test a production build locally over plain HTTP — never in a real deployment.
 
 ## Server-Side Proxy Pattern
 

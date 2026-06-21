@@ -15,11 +15,12 @@ cp .env.local.example .env.local
 
 | Variable | Required | Description |
 |---|---|---|
-| `SESSION_SECRET` | Yes | 32+ character random string for cookie encryption |
-| `ACCESS_CODE` | Yes | Passphrase for the login screen |
-| `VESTABOARD_API_TOKEN` | Yes | Vestaboard RW API key |
-| `CRON_SECRET` | Optional | Bearer token for external workflow scheduler calls |
+| `SESSION_SECRET` | **Yes** | 32+ character random string for cookie encryption |
+| `ACCESS_CODE` | **Yes** | Passphrase for the login screen |
+| `VESTABOARD_API_TOKEN` | **Yes** | Vestaboard RW API key |
+| `CRON_SECRET` | Optional | Bearer token to authenticate the workflow scheduler endpoint |
 | `GEMMA_API_KEY` | Optional | Google AI Studio key for Gemma-powered workflows |
+| `SECURE_COOKIES` | Optional | Set to `false` only when testing a production build locally over plain HTTP — **never in a real deployment** |
 
 ### Generating Secrets
 
@@ -145,7 +146,8 @@ Mount a persistent volume at `/app/data` so the JSON stores survive container re
 - [ ] `ACCESS_CODE` is strong and not reused elsewhere
 - [ ] `CRON_SECRET` is set and rotated periodically
 - [ ] `GEMMA_API_KEY` is scoped to the project in Google AI Studio
-- [ ] HTTPS is enforced in production (Vercel handles this automatically)
+- [ ] HTTPS is enforced in production (Vercel does this automatically; use a reverse proxy for Docker)
+- [ ] `SECURE_COOKIES` is **not** set to `false` in production
 - [ ] The `data/` directory is excluded from version control (`.gitignore`)
 - [ ] No `.env.local` or secrets file is committed to the repository
 - [ ] `AGENTS.md` / `CLAUDE.md` / agentic files are excluded from version control
