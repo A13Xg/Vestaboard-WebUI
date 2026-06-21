@@ -4,6 +4,18 @@ A self-hosted control panel for your Vestaboard. Compose messages, manage preset
 
 ---
 
+## Features
+
+- **Live board preview** — see your current Vestaboard state directly in the browser
+- **Message composer** — type text or enter raw character codes, with alignment controls and transition effects
+- **Presets** — save and reuse your favourite messages with one click
+- **Message history** — every sent message is logged; reload any past message into the composer
+- **Workflow automation** — schedule recurring messages (daily, weekly, cron, or one-time) with optional live data from 9 built-in integrations
+- **Mobile-friendly Quick Send** — minimal interface for sending from a phone
+- **Gemma AI** — optionally generate board content using Google's Gemma model
+
+---
+
 ## Screenshots
 
 ### Dashboard
@@ -28,15 +40,7 @@ A stripped-down send page built for phones — compose, preview, send.
 
 ---
 
-## Features
 
-- **Live board preview** — see your current Vestaboard state directly in the browser
-- **Message composer** — type text or enter raw character codes, with alignment controls and transition effects
-- **Presets** — save and reuse your favourite messages with one click
-- **Message history** — every sent message is logged; reload any past message into the composer
-- **Workflow automation** — schedule recurring messages (daily, weekly, cron, or one-time) with optional live data from 9 built-in integrations
-- **Mobile-friendly Quick Send** — minimal interface for sending from a phone
-- **Gemma AI** — optionally generate board content using Google's Gemma model
 
 ---
 
