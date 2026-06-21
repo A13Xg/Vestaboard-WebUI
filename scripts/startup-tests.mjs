@@ -151,19 +151,19 @@ async function main() {
   if (!buildOk) failures++;
 
   let cronOk = false;
-  let cronDetail = "vercel.json missing";
+  let cronDetail = "vercel.json not found (advisory — not required for local/Docker)";
   if (fs.existsSync(vercelPath)) {
     try {
       const vercelConfig = JSON.parse(fs.readFileSync(vercelPath, "utf8"));
       const crons = Array.isArray(vercelConfig.crons) ? vercelConfig.crons : [];
       cronOk = crons.some((c) => c.path === "/api/workflows/runner");
-      cronDetail = cronOk ? "runner cron configured" : "runner cron missing";
+      cronDetail = cronOk ? "runner cron configured" : "runner cron missing from vercel.json";
     } catch {
-      cronDetail = "invalid vercel.json";
+      cronDetail = "invalid vercel.json (advisory)";
     }
   }
-  printResult("Workflow cron config", cronOk, cronDetail);
-  if (!cronOk) failures++;
+  const cronStatus = cronOk ? "PASS" : "WARN";
+  console.log(`[${cronStatus}] Workflow cron config :: ${cronDetail}`);
 
   if (failures > 0) {
     console.error(`Startup tests failed: ${failures}`);

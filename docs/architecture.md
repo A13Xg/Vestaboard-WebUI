@@ -5,10 +5,10 @@
 ```
 Browser
   │
-  ├─ Page (React Server Component or Client Component)
-  │     └─ lib/api-client.ts (fetch wrapper, browser-safe)
-  │           └─ Next.js API Route Handler (server)
-  │                 ├─ lib/server-auth.ts  → requireSession()
+  ├─ React Page / Client Component
+  │     └─ lib/api-client.ts          (type-safe fetch wrapper, browser-side)
+  │           └─ Next.js API Route    (server-side handler)
+  │                 ├─ lib/server-auth.ts        → requireSession()
   │                 ├─ lib/vestaboard-server.ts  → Vestaboard RW API
   │                 └─ lib/workflow-store.ts / preset-store.ts / message-history.ts
   │
@@ -17,15 +17,15 @@ Browser
 
 ## Authentication
 
-Iron Session stores a single `isAuthenticated` boolean in an encrypted, signed cookie. There are no user accounts — a single shared `ACCESS_CODE` env variable acts as the passphrase.
+Iron Session stores a single `isAuthenticated` boolean in an encrypted, signed cookie. There are no user accounts — a single shared `ACCESS_CODE` environment variable acts as the passphrase.
 
 - `lib/server-auth.ts` exports `requireSession()` — all protected API routes call this first.
-- The login route in `app/api/auth/login/route.ts` uses a constant-time string comparison to prevent timing attacks, plus an artificial 300 ms delay on failure to slow brute-force attempts.
-- Session cookies use `httpOnly`, `secure`, and `sameSite: lax`.
+- `app/api/auth/login/route.ts` uses a constant-time string comparison that pads both inputs to the same length before XOR-comparing, preventing both timing attacks and length oracle leaks. A 400 ms artificial delay on failure further slows brute-force attempts.
+- Session cookies are configured with `httpOnly`, `secure`, and `sameSite: lax`.
 
 ## Server-Side Proxy Pattern
 
-The Vestaboard API token (`VESTABOARD_API_TOKEN`) lives only in server environment variables. The browser never sees it. Every board operation goes through a Next.js API route that forwards the request server-side and proxies the response back to the client.
+The Vestaboard API token (`VESTABOARD_API_TOKEN`) lives only in server environment variables. The browser never sees it. Every board operation goes through a Next.js API route that adds the credential server-side and proxies the response back to the client.
 
 ```
 Client → POST /api/vestaboard/send
@@ -36,17 +36,18 @@ Client → POST /api/vestaboard/send
 
 ## Data Persistence
 
-Three local JSON files live under `data/` (auto-created, gitignored):
+Three local JSON files live under `data/` (auto-created on first write, gitignored):
 
-| File | Purpose |
-|---|---|
-| `data/presets.json` | Saved named message presets |
-| `data/message-history.json` | Log of every sent message (max 5 000) |
-| `data/workflows.json` | Workflow automation configurations |
+| File | Purpose | Max entries |
+|---|---|---|
+| `data/presets.json` | Saved named message presets | Unlimited |
+| `data/message-history.json` | Log of every sent message | 5,000 |
+| `data/workflows.json` | Workflow automation configurations | Unlimited |
+| `data/transition.json` | Current transition style + speed | Single object |
 
 ### Write-Lock Pattern
 
-Next.js runs multiple concurrent requests. To prevent JSON file corruption, all writes are serialised via a `global.__*WriteQueue` promise chain. The global variable survives hot-reloads in dev mode and ensures writes are never interleaved.
+Next.js runs multiple concurrent requests. To prevent JSON file corruption, all writes are serialised via a `global.__*WriteQueue` promise chain. The global variable survives hot-reloads in dev mode and ensures writes are never interleaved. A `.catch(run)` on each chain entry ensures a failed write never permanently blocks future writes.
 
 ```ts
 global.__workflowWriteQueue = (global.__workflowWriteQueue ?? Promise.resolve())
@@ -55,27 +56,42 @@ global.__workflowWriteQueue = (global.__workflowWriteQueue ?? Promise.resolve())
 await global.__workflowWriteQueue;
 ```
 
+> **Vercel note:** Serverless functions have an ephemeral filesystem. Files written to `data/` will not persist across deployments or function restarts. See [Deployment](deployment.md) for production persistence options.
+
 ## Client-Side State
 
 Pages use React hooks:
-- `hooks/use-board-state.ts` — fetches and refreshes the current board display; auto-fetches once on mount.
-- `hooks/use-toast.ts` — global toast notification queue (no external library).
+- `hooks/use-board-state.ts` — fetches and refreshes the live board display; auto-fetches once on mount with ref-based debounce to avoid duplicate requests.
+- `hooks/use-toast.ts` — global toast notification queue.
+- `hooks/use-board-model.ts` — reads and writes the selected board model from `localStorage`.
+- `hooks/use-session.ts` — checks session validity client-side for route guards.
 
 Client-side logging goes through `lib/client-logger.ts` — an in-memory ring buffer (500 entries) with a pub/sub listener pattern for live log viewers without React re-renders.
 
 ## Board Model Switching
 
-Two board profiles exist (`flagship` 6×22, `note` 3×15) defined in `lib/board-model.ts`. The selected model is persisted in `localStorage` via `BOARD_MODEL_STORAGE_KEY` and read client-side on load. Validation limits are automatically derived from the active profile's `rows × cols`.
+Two board profiles are defined in `lib/board-model.ts`:
+
+| Model | Rows | Cols | Total cells |
+|---|---|---|---|
+| `flagship` | 6 | 22 | 132 |
+| `note` | 3 | 15 | 45 |
+
+The selected model is persisted in `localStorage` via `BOARD_MODEL_STORAGE_KEY` and read client-side on load. Validation limits, matrix dimensions, and character counts are all derived automatically from the active profile.
 
 ## Component Organisation
 
 ```
 components/
-  dashboard/   — Board display, presets grid, quick actions, history, logs
+  board/       — BoardGrid (animated cell display), BoardCell, preview helpers
+  dashboard/   — Board display card, presets grid, quick actions, history list, logs
   forms/       — ComposeDrawer (slide-in message composer), PresetEditor
-  layout/      — AppShell (sidebar nav, responsive layout)
-  workflows/   — WorkflowRunnerHeartbeat (client component, fires runner API)
+  layout/      — AppShell utilities
+  navigation/  — Sidebar, header
+  overlays/    — Dialogs and drawers
+  feedback/    — Toast queue, client log viewer
+  workflows/   — WorkflowRunnerHeartbeat (client component, polls runner API)
   ui/          — Headless/primitive components (Button, Dialog, Toast, etc.)
 ```
 
-The `app/(app)/compose/page.tsx` file is a 3-line re-export of the dashboard page. Both `/` and `/compose` share identical layout; the separate route exists for deep-linking and future divergence.
+The `app/(app)/compose/page.tsx` file is a thin re-export of the dashboard page. Both `/` and `/compose` share the same layout; the separate route exists for deep-linking purposes.

@@ -1,51 +1,107 @@
 # Vestaboard WebUI
 
-Production-oriented Next.js control panel for authenticated Vestaboard operations.
-
-> Full developer wiki: [`docs/`](docs/)
+A self-hosted control panel for your Vestaboard. Compose messages, manage presets, build automated workflows with live data, and monitor your board — all from a clean web UI.
 
 ---
 
-## Stack
+## Screenshots
+
+### Dashboard
+View the current board state, fire off presets, and browse message history.
+
+![Dashboard](docs/screenshots/Dashboard.png)
+
+### Workflow Studio
+Schedule automated messages with built-in data providers: weather, crypto, stocks, news, quotes, jokes, and more.
+
+![Workflow Studio](docs/screenshots/Schedules-Integration.png)
+
+### Settings
+Test your API connection, switch board models, and configure transition effects.
+
+![Settings](docs/screenshots/API-Settings.png)
+
+### Quick Send (Mobile)
+A stripped-down send page built for phones — compose, preview, send.
+
+![Quick Send](docs/screenshots/Quick-Send_Mobile.png)
+
+---
+
+## Features
+
+- **Live board preview** — see your current Vestaboard state directly in the browser
+- **Message composer** — type text or enter raw character codes, with alignment controls and transition effects
+- **Presets** — save and reuse your favourite messages with one click
+- **Message history** — every sent message is logged; reload any past message into the composer
+- **Workflow automation** — schedule recurring messages (daily, weekly, cron, or one-time) with optional live data from 9 built-in integrations
+- **Mobile-friendly Quick Send** — minimal interface for sending from a phone
+- **Gemma AI** — optionally generate board content using Google's Gemma model
+
+---
+
+## Tech Stack
 
 | Layer | Library |
 |---|---|
-| Framework | Next.js 16 App Router + TypeScript |
-| Styling | Tailwind CSS |
+| Framework | Next.js 16 (App Router) + TypeScript |
+| Styling | Tailwind CSS v4 |
 | Animation | Framer Motion |
 | Forms | React Hook Form + Zod |
 | Icons | Lucide React |
-| Auth | Iron Session (encrypted cookie) |
+| Auth | Iron Session (encrypted cookie, no database) |
 
 ---
 
 ## Quick Start
 
 ```bash
-cp .env.local.example .env.local   # fill in env vars (see below)
+# 1. Copy the env template and fill in your values
+cp .env.local.example .env.local
+
+# 2. Install and run
 npm install
 npm run dev
 ```
 
-Windows batch helper (build + start):
+Open [http://localhost:3000](http://localhost:3000) and log in with the `ACCESS_CODE` you set.
 
-```bat
-.\build-and-live-test.bat
+### Launch Scripts (build + start)
+
+**macOS / Linux:**
+```bash
+chmod +x run.sh && ./run.sh
 ```
+
+**Windows:**
+```bat
+.\runWebApp.bat
+```
+
+Both scripts install dependencies, build, run advisory startup tests, and start the production server.
 
 ---
 
 ## Environment Variables
 
+Create `.env.local` from `.env.local.example` and populate all required values.
+
 | Variable | Required | Description |
 |---|---|---|
-| `SESSION_SECRET` | Yes | 32+ char secret for iron-session cookie encryption |
-| `ACCESS_CODE` | Yes | Single-user passphrase for the login screen |
-| `VESTABOARD_API_TOKEN` | Yes | Vestaboard RW (read/write) API key |
-| `CRON_SECRET` | Optional | Bearer token for external workflow scheduler calls |
-| `GEMMA_API_KEY` | Optional | Google AI Studio API key for Gemma-powered workflows |
+| `SESSION_SECRET` | **Yes** | 32+ character random string for cookie encryption |
+| `ACCESS_CODE` | **Yes** | Passphrase for the login screen |
+| `VESTABOARD_API_TOKEN` | **Yes** | Vestaboard RW (read/write) API key |
+| `CRON_SECRET` | Optional | Bearer token to authenticate the workflow scheduler endpoint |
+| `GEMMA_API_KEY` | Optional | Google AI Studio key for Gemma-powered workflow messages |
 
-Create `.env.local` from `.env.local.example` and populate all required values before running.
+**Generating secrets:**
+```bash
+# SESSION_SECRET
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# CRON_SECRET
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+```
 
 ---
 
@@ -53,151 +109,86 @@ Create `.env.local` from `.env.local.example` and populate all required values b
 
 ```
 app/
-  (app)/               # Authenticated app shell (layout + pages)
+  (app)/               # Authenticated app shell
     page.tsx           # Dashboard — board preview, presets, history
-    compose/page.tsx   # /compose — re-exports dashboard page
+    compose/page.tsx   # /compose — re-exports dashboard
     workflows/page.tsx # Workflow Studio
     settings/page.tsx  # Settings (connectivity, board model, transitions)
-  login/               # Login page (access-code entry)
-  quick-send/page.tsx  # /quick-send — minimal mobile-first send flow
+  login/               # Login page
+  quick-send/          # Mobile-first send page
   api/
     auth/              # login / logout / session check
     vestaboard/        # current, send, preview, transition, connectivity
-    workflows/         # CRUD + runner + preview endpoints
-    messages/          # Message history endpoint
+    workflows/         # CRUD + runner + preview
+    messages/          # Message history
 
 components/
-  dashboard/           # Board display, presets, quick actions, history cards
+  board/               # BoardGrid, BoardCell, animated display
+  dashboard/           # Presets, history, quick actions
   forms/               # ComposeDrawer, PresetEditor
-  layout/              # AppShell, navigation
-  workflows/           # WorkflowRunnerHeartbeat client component
-  ui/                  # Primitive UI components (button, dialog, toast, etc.)
+  navigation/          # Sidebar, header
+  workflows/           # WorkflowRunnerHeartbeat (client polling)
+  ui/                  # Primitive components (Button, Dialog, Toast, …)
 
 lib/
-  board-utils.ts       # Character code encoding/decoding, matrix helpers
-  board-model.ts       # Board model definitions (flagship 6×22, note 3×15)
-  vestaboard-server.ts # Server-side Vestaboard API proxy + send pipeline
-  message-validation.ts # Text + matrix validation against board character set
-  message-history.ts   # JSON-backed message history store (write-locked)
+  board-utils.ts       # Character encoding, matrix helpers, text wrapping
+  board-model.ts       # Board profile definitions (flagship 6×22, note 3×15)
+  vestaboard-server.ts # Server-side Vestaboard API proxy + retry logic
+  message-validation.ts # Text and matrix validation
+  message-history.ts   # JSON-backed message log (write-locked)
+  preset-store.ts      # JSON-backed preset store (write-locked)
   workflow-store.ts    # JSON-backed workflow store (write-locked CRUD + runner)
-  workflow-scheduler.ts # Next-run-at calculation and schedule summaries
-  workflow-integrations.ts  # Data provider resolvers (weather, crypto, stocks…)
-  workflow-integration-defs.ts # Integration metadata (labels, fields, templates)
-  server-auth.ts       # requireSession() / getSession() iron-session helpers
+  workflow-scheduler.ts # Next-run-at calculation for all schedule types
+  workflow-integrations.ts # Data provider resolvers
+  gemma-server.ts      # Google Gemma API client
+  server-auth.ts       # requireSession() / getSession() helpers
   api-client.ts        # Type-safe browser-side API wrapper
-  client-logger.ts     # In-memory ring-buffer log (500 entries, subscriber pattern)
-  mock-data.ts         # Fallback data used when Vestaboard API is unavailable
-
-hooks/
-  use-board-state.ts   # Fetches + refreshes the live board display
-  use-toast.ts         # Global toast notification system
 
 config/
-  index.ts / constants.ts  # Board dimensions, colour map, app routes, API routes
+  constants.ts         # Board dimensions, colour map, route constants
   session.ts           # Iron-session cookie config
 
-types/index.ts         # All DTOs and domain interfaces
+types/index.ts         # All TypeScript DTOs and domain interfaces
 
-data/                  # Runtime JSON persistence (gitignored)
-  presets.json
-  message-history.json
-  workflows.json
+data/                  # Runtime JSON persistence — gitignored, auto-created
+scripts/
+  startup-tests.mjs    # Env var + API connectivity checks
 ```
 
 ---
 
-## Architecture Overview
+## Workflow Automation
 
-### Authentication
-
-All protected pages and API routes go through `lib/server-auth.ts`:
-- `requireSession()` — use in every protected API route handler
-- `getSession()` — use when you need the raw session object
-
-The login flow validates `ACCESS_CODE` with a constant-time string comparison to prevent timing attacks, then sets an encrypted iron-session cookie.
-
-### Board Communication
-
-All Vestaboard API calls happen server-side via `lib/vestaboard-server.ts`. The browser never sees the API token. The client-side `lib/api-client.ts` calls the Next.js proxy routes which forward requests to the Vestaboard RW endpoint.
-
-### Data Persistence
-
-Three JSON files under `data/` (auto-created on first write, gitignored):
-
-| File | Store | Max entries |
-|---|---|---|
-| `presets.json` | Named message presets | Unlimited |
-| `message-history.json` | Sent message log | 5 000 |
-| `workflows.json` | Workflow automation configs | Unlimited |
-
-All writes are serialised through a `global.__*WriteQueue` promise chain (write-lock pattern) to prevent concurrent writes corrupting the file under simultaneous requests.
-
-### Character Encoding
-
-Vestaboard uses a numeric character-code system (not ASCII):
-- `0` = blank cell
-- `1–26` = A–Z
-- `27–35` = 1–9
-- `36` = 0
-- `37–60` = punctuation (see `board-utils.ts`)
-- `63–71` = colour fill tiles (see `COLOR_MAP` in `config/constants.ts`)
-
-`lib/board-utils.ts` provides `charToCode`, `codeToChar`, `textToMatrix`, and matrix helpers.
-
----
-
-## Workflow Scheduling
-
-Workflows are automated messages sent to the board on a schedule.
+Workflows let you send scheduled messages to your board, optionally pulling live data from external services.
 
 ### Schedule Types
 
-| Type | Config fields | Example |
+| Type | Description |
+|---|---|
+| `once` | Sends at a specific date and time |
+| `daily` | Sends every day at a chosen time |
+| `weekly` | Sends on selected days of the week |
+| `cron` | Full cron expression (minute + hour fields) |
+
+### Data Integrations
+
+| Provider | What it sends | API |
 |---|---|---|
-| `once` | `at` (ISO datetime) | `"at": "2026-05-01T09:00:00Z"` |
-| `daily` | `timeHHMM` | `"timeHHMM": "08:30"` |
-| `weekly` | `timeHHMM`, `daysOfWeek` (0=Sun) | `"daysOfWeek": [1,3,5]` |
-| `cron` | `cron` (`minute hour * * *`) | `"cron": "0 9 * * *"` |
+| Weather | Temperature, conditions, wind | Open-Meteo (free) |
+| Crypto | Price, 24h change | CoinGecko (free) |
+| Stocks | OHLCV quote | Stooq (free) |
+| News | Top Hacker News headline | HN Algolia (free) |
+| Quote | Random inspirational quote | DummyJSON (free) |
+| Exchange Rates | Currency conversion rate | Frankfurter (free) |
+| Time | Current time/date/timezone | Server clock |
+| Joke | Setup + punchline | Official Joke API (free) |
+| Gemma AI | AI-generated board copy | Google Gemma (`GEMMA_API_KEY`) |
 
-> Note: Only the first two cron fields (minute + hour) are parsed. Day-of-month, month, and day-of-week cron fields are ignored.
+Use `{variableName}` placeholders in your message template — they're filled in at send time.
 
-### Data Sources (Integrations)
+### Vercel Cron (automated scheduling)
 
-Each workflow can optionally pull live data from a provider and interpolate it into the message template using `{variableName}` placeholders.
-
-| Provider | Variables | External API |
-|---|---|---|
-| `weather` | `{location}` `{tempDeg}` `{tempDegF}` `{condition}` `{conditionIconSymbol}` `{windKph}` | Open-Meteo (free, no key) |
-| `crypto` | `{assetName}` `{price}` `{currency}` `{change24hPct}` | CoinGecko (free tier) |
-| `stocks` | `{symbol}` `{open}` `{high}` `{low}` `{close}` `{volume}` | Stooq (free) |
-| `news` | `{headline}` `{author}` `{points}` | Hacker News Algolia (free) |
-| `quote` | `{quote}` `{author}` | DummyJSON (free) |
-| `exchange-rates` | `{base}` `{target}` `{rate}` `{date}` | Frankfurter (free) |
-| `time` | `{time}` `{date}` `{timezone}` `{timezoneLabel}` | Server system clock |
-| `joke` | `{setup}` `{punchline}` `{type}` | Official Joke API (free) |
-| `gemma` | `{response}` `{prompt}` `{model}` | Google Gemma via Gemini API (`GEMMA_API_KEY`) |
-
-### API Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/workflows` | List all workflows |
-| POST | `/api/workflows` | Create a workflow |
-| GET | `/api/workflows/:id` | Get one workflow |
-| PATCH | `/api/workflows/:id` | Update a workflow |
-| DELETE | `/api/workflows/:id` | Delete a workflow |
-| POST | `/api/workflows/runner` | Run due or specific workflow |
-| POST | `/api/workflows/preview` | Preview rendered output |
-
-### Runner Authentication
-
-`POST /api/workflows/runner` accepts two auth methods:
-1. **Session cookie** (browser / UI)
-2. **CRON_SECRET** via `X-Cron-Secret: <secret>` header or `Authorization: Bearer <secret>`
-
-### Vercel Cron
-
-`vercel.json` schedules `POST /api/workflows/runner` every 5 minutes:
+`vercel.json` fires the workflow runner every 5 minutes on Vercel:
 
 ```json
 {
@@ -205,7 +196,7 @@ Each workflow can optionally pull live data from a provider and interpolate it i
 }
 ```
 
-Set `CRON_SECRET` in Vercel environment variables and add it to the cron request header.
+Set `CRON_SECRET` in your Vercel environment variables for authenticated cron requests.
 
 ---
 
@@ -213,30 +204,34 @@ Set `CRON_SECRET` in Vercel environment variables and add it to the cron request
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/vestaboard/current` | Fetch live board state (falls back to mock) |
-| POST | `/api/vestaboard/send` | Send text or matrix to the board |
-| POST | `/api/vestaboard/preview` | Generate a matrix preview from text |
-| GET | `/api/vestaboard/transition` | Get current transition setting |
-| PUT | `/api/vestaboard/transition` | Update transition setting |
-| GET | `/api/vestaboard/connectivity` | Check API token connectivity |
+| `GET` | `/api/vestaboard/current` | Fetch live board state (falls back to mock) |
+| `POST` | `/api/vestaboard/send` | Send text or raw matrix to the board |
+| `POST` | `/api/vestaboard/preview` | Render a text preview without sending |
+| `GET` | `/api/vestaboard/transition` | Get current transition setting |
+| `PUT` | `/api/vestaboard/transition` | Update transition setting |
+| `GET` | `/api/vestaboard/connectivity` | Check API token connectivity |
 
-No API keys or secrets are ever sent to the browser.
-
-### Quick Send
-
-`/quick-send` is a stripped-down authenticated mobile page that:
-- shows the current board state
-- exposes a single large **Send Message** CTA
-- previews the draft before sending
-- confirms the send by refetching the current board message and matching it to the just-sent matrix before showing success
+The `VESTABOARD_API_TOKEN` is never sent to the browser. All board operations are proxied server-side.
 
 ---
 
-## Further Reading
+## Security Notes
 
-- [Architecture deep-dive](docs/architecture.md)
-- [Workflow system](docs/workflows.md)
-- [Character encoding](docs/character-encoding.md)
-- [Deployment guide](docs/deployment.md)
-- [Adding integrations](docs/adding-integrations.md)
+- Login uses constant-time string comparison to prevent timing attacks
+- A 400 ms artificial delay is applied on failed login to slow brute-force attempts
+- Iron Session cookies are `httpOnly`, `secure`, and `sameSite: lax`
+- All protected routes require a valid session via `requireSession()`
+- The workflow runner endpoint accepts either session cookies or a `CRON_SECRET` header
+- Never commit `.env.local` or any file containing secrets
 
+---
+
+## Developer Docs
+
+Full documentation lives in [`docs/`](docs/):
+
+- [Architecture](docs/architecture.md) — request flow, auth, persistence, component structure
+- [Workflows](docs/workflows.md) — scheduling, data providers, execution pipeline
+- [Character Encoding](docs/character-encoding.md) — Vestaboard codes, colour tiles, matrix format
+- [Deployment](docs/deployment.md) — Vercel, Docker, environment setup
+- [Adding Integrations](docs/adding-integrations.md) — extend workflows with a new data provider

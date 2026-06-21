@@ -27,7 +27,9 @@ async function writeFile(data: VestaboardTransition): Promise<void> {
     await fs.mkdir(path.dirname(TRANSITION_FILE), { recursive: true });
     await fs.writeFile(TRANSITION_FILE, JSON.stringify(data, null, 2), "utf-8");
   };
-  global.__transitionWriteQueue = (global.__transitionWriteQueue ?? Promise.resolve()).then(task);
+  global.__transitionWriteQueue = (global.__transitionWriteQueue ?? Promise.resolve())
+    .then(task)
+    .catch(task);
   await global.__transitionWriteQueue;
 }
 

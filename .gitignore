@@ -41,7 +41,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 !.env.local.example
 
@@ -51,7 +51,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# runtime data (auto-created, never commit)
+data/presets.json
+data/message-history.json
 data/transition.json
 data/workflows.json
-data/message-history.json
-data/workflows.json
+
+# agentic / AI assistant files
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+MEMORY.md
+.claude/
+memory/
+docs/superpowers/

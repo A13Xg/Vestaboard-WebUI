@@ -80,6 +80,8 @@ Open `lib/workflow-integration-defs.ts` and add an entry to the `WORKFLOW_INTEGR
 Open `lib/workflow-integrations.ts`. Add a private resolver function:
 
 ```ts
+import { sanitizeBoardText } from "@/lib/board-utils";
+
 /** Fetches data from My Provider and returns board-safe template variables. */
 async function resolveMyProvider(config: Record<string, string>) {
   const configKey = (config.configKey || "default").trim();
@@ -89,14 +91,14 @@ async function resolveMyProvider(config: Record<string, string>) {
   if (!res.ok) throw new Error("My Provider lookup failed");
   const json = await res.json() as { value?: string; other?: string };
   return {
-    myVariable: boardSafe(json.value ?? "N/A"),
-    otherVar: boardSafe(json.other ?? ""),
+    myVariable: sanitizeBoardText(json.value ?? "N/A"),
+    otherVar: sanitizeBoardText(json.other ?? ""),
   };
 }
 ```
 
 **Important conventions:**
-- All returned values must pass through `boardSafe()` to strip unsupported characters.
+- All returned values must pass through `sanitizeBoardText()` to strip unsupported characters.
 - Use `cache: "no-store"` so every workflow execution gets fresh data.
 - Throw a descriptive `Error` on failure — the runner catches it and records it in `lastExecution`.
 - Return a flat `Record<string, string>` — keys become `{variable}` names.
@@ -150,7 +152,7 @@ Expected response:
 
 - [ ] Provider ID added to `WorkflowDataSourceProviderId` in `types/index.ts`
 - [ ] Definition added to `WORKFLOW_INTEGRATIONS` array
-- [ ] Resolver function written with `boardSafe()` on all returned values
+- [ ] Resolver function written with `sanitizeBoardText()` on all returned values
 - [ ] `case` added to `resolveWorkflowDataSource`
 - [ ] Preview tested with a real template
 - [ ] Error path tested (bad config, API down)

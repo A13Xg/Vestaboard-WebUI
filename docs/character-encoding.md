@@ -16,13 +16,13 @@ Vestaboard uses a proprietary numeric character-code system, not ASCII. Understa
 ## Supported Printable Characters
 
 ```
-ABCDEFGHIJKLMNOPQRSTUVWXYZ
-0123456789
+A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+0 1 2 3 4 5 6 7 8 9
 ! @ # $ ( ) - + & = ; : ' " % , . / ? °
 (space)
 ```
 
-Lowercase letters are **not supported** — text is always uppercased before encoding.
+Lowercase letters are **not supported** — all text is uppercased before encoding.
 
 ## Special Character Codes
 
@@ -40,21 +40,25 @@ Lowercase letters are **not supported** — text is always uppercased before enc
 | | | | `?` | 60 |
 | | | | `°` | 62 |
 
+> Codes 43, 45, 51, 57, and 58 are reserved/unused in the current Vestaboard firmware.
+
 ## Colour Fill Codes
 
-| Code | Colour |
-|---|---|
-| `63` | Red `#FF4136` |
-| `64` | Orange `#FF851B` |
-| `65` | Yellow `#FFDC00` |
-| `66` | Green `#2ECC40` |
-| `67` | Blue `#0074D9` |
-| `68` | Violet `#B10DC9` |
-| `69` | White `#FFFFFF` |
-| `70` | Black `#000000` |
-| `71` | Default flap colour |
+| Code | Colour | Hex |
+|---|---|---|
+| `63` | Red | `#FF4136` |
+| `64` | Orange | `#FF851B` |
+| `65` | Yellow | `#FFDC00` |
+| `66` | Green | `#2ECC40` |
+| `67` | Blue | `#0074D9` |
+| `68` | Violet | `#B10DC9` |
+| `69` | White | `#FFFFFF` |
+| `70` | Black | `#000000` |
+| `71` | Default flap colour | — |
 
-Colour tiles fill an entire cell with a solid colour and render no character glyph.
+Colour tiles fill an entire cell with a solid background and render no character glyph.
+
+In workflow templates, colour tokens use the shorthand `{R}`, `{O}`, `{Y}`, `{G}`, `{B}`, `{P}`, `{W}` for red, orange, yellow, green, blue, purple, and white respectively.
 
 ## Board Dimensions
 
@@ -65,13 +69,16 @@ Colour tiles fill an entire cell with a solid colour and render no character gly
 
 ## Matrix Format
 
-A board state is a 2-D array of integer codes:
+A board state is a 2-D array of integer codes (rows × cols):
 
 ```ts
 type BoardMatrix = number[][];
-// e.g. for a 2×3 board:
-[[1, 2, 3], [27, 28, 0]]  // "ABC" / "01 "
+
+// Example: 2×3 board with "AB " on row 0 and "1  " on row 1
+[[1, 2, 0], [27, 0, 0]]
 ```
+
+Matrices sent to the Vestaboard API must be exactly `rows × cols` in size. `lib/board-utils.ts` provides `normalizeMatrixSize()` to crop or pad any matrix to the correct dimensions.
 
 ## Utility Functions (`lib/board-utils.ts`)
 
@@ -79,20 +86,24 @@ type BoardMatrix = number[][];
 |---|---|
 | `charToCode(ch)` | Single character → Vestaboard code |
 | `codeToChar(code)` | Vestaboard code → printable character |
-| `textToMatrix(text, rows, cols)` | Multi-line text string → board matrix |
+| `textToMatrix(text, rows, cols, alignment?)` | Multi-line text → board matrix |
+| `fitTextToBoard(text, boardModel?, options?)` | Sanitise + wrap + align → matrix + metadata |
 | `matrixToPlainText(matrix)` | Board matrix → plain text string |
-| `emptyMatrix(rows?, cols?)` | Returns a blank matrix |
+| `emptyMatrix(rows?, cols?)` | Returns a blank all-zero matrix |
 | `cloneMatrix(matrix)` | Deep-copies a matrix |
 | `fillMatrix(code, rows?, cols?)` | Fills entire matrix with one code |
-| `normalizeMatrixSize(matrix)` | Crops/pads to exact board dimensions |
-| `matrixHasContent(matrix)` | Returns true if any cell is non-zero |
+| `normalizeMatrixSize(matrix, rows?, cols?)` | Crops/pads to exact board dimensions |
+| `matrixHasContent(matrix)` | Returns `true` if any cell is non-zero |
+| `sanitizeBoardText(text, options?)` | Normalises Unicode, uppercases, strips unsupported chars |
+| `wrapTextToRows(text, cols?, options?)` | Word-wraps text to fixed column width |
 
 ## Validation (`lib/message-validation.ts`)
 
 `validateMessageText(text, boardModel?)` checks:
 1. Text is non-empty after trimming
-2. Length ≤ `rows × cols` for the given board model
-3. Every character (after uppercasing) is in the allowed set
+2. Character count ≤ `rows × cols` for the selected board model
+3. Every character (after uppercasing) is in the allowed character set
+4. Wrapped row count ≤ `rows`
 
 `validateMatrix(matrix)` checks:
 1. Is a non-empty 2-D array
