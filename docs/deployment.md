@@ -20,7 +20,7 @@ cp .env.local.example .env.local
 | `VESTABOARD_API_TOKEN` | **Yes** | Vestaboard RW API key |
 | `CRON_SECRET` | Optional | Bearer token to authenticate the workflow scheduler endpoint |
 | `GEMMA_API_KEY` | Optional | Google AI Studio key for Gemma-powered workflows |
-| `SECURE_COOKIES` | Optional | Set to `false` only when testing a production build locally over plain HTTP — **never in a real deployment** |
+| `SECURE_COOKIES` | Optional | Set to `true` when serving over HTTPS (Vercel, Docker + TLS proxy). Leave unset for local use via the launchers. |
 
 ### Generating Secrets
 
@@ -147,7 +147,7 @@ Mount a persistent volume at `/app/data` so the JSON stores survive container re
 - [ ] `CRON_SECRET` is set and rotated periodically
 - [ ] `GEMMA_API_KEY` is scoped to the project in Google AI Studio
 - [ ] HTTPS is enforced in production (Vercel does this automatically; use a reverse proxy for Docker)
-- [ ] `SECURE_COOKIES` is **not** set to `false` in production
+- [ ] `SECURE_COOKIES=true` is set when serving over HTTPS
 - [ ] The `data/` directory is excluded from version control (`.gitignore`)
 - [ ] No `.env.local` or secrets file is committed to the repository
 - [ ] `AGENTS.md` / `CLAUDE.md` / agentic files are excluded from version control

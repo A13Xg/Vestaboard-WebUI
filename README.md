@@ -224,7 +224,7 @@ The `VESTABOARD_API_TOKEN` is never sent to the browser. All board operations ar
 - Login uses a constant-time string comparison that pads both inputs to the same length before XOR-comparing every character, preventing timing attacks and length oracle leaks
 - A 400 ms artificial delay is applied on every failed login attempt to slow brute-force attacks
 - Session cookies are `httpOnly`, `sameSite: lax`, and expire after 24 hours
-- The `secure` cookie flag is enabled in all production environments by default; set `SECURE_COOKIES=false` only for local HTTP testing of production builds
+- The `secure` cookie flag is **off by default** so the launchers work over plain HTTP; set `SECURE_COOKIES=true` when serving over HTTPS
 - All protected API routes call `requireSession()` before doing any work
 - The workflow runner endpoint requires either a valid session cookie or the `CRON_SECRET` header — if `CRON_SECRET` is not configured, only session auth is accepted
 - The Vestaboard API token is never sent to the browser; all board operations are proxied server-side
