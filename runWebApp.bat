@@ -45,6 +45,7 @@ if errorlevel 1 (
 echo.
 echo Open http://localhost:3000 in your browser.
 echo Press Ctrl+C to stop.
+set SECURE_COOKIES=false
 call node .\node_modules\next\dist\bin\next start
 
 endlocal

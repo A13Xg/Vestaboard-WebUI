@@ -59,4 +59,4 @@ fi
 echo ""
 echo "Open http://localhost:3000 in your browser."
 echo "Press Ctrl+C to stop."
-node ./node_modules/next/dist/bin/next start
+SECURE_COOKIES=false node ./node_modules/next/dist/bin/next start

@@ -20,7 +20,7 @@ cp .env.local.example .env.local
 | `VESTABOARD_API_TOKEN` | **Yes** | Vestaboard RW API key |
 | `CRON_SECRET` | Optional | Bearer token to authenticate the workflow scheduler endpoint |
 | `GEMMA_API_KEY` | Optional | Google AI Studio key for Gemma-powered workflows |
-| `SECURE_COOKIES` | Optional | Set to `true` when serving over HTTPS (Vercel, Docker + TLS proxy). Leave unset for local use via the launchers. |
+| `SECURE_COOKIES` | Optional | Overrides cookie security. Defaults to `true` when `NODE_ENV=production`. The launchers set this to `false` automatically for plain-HTTP localhost. |
 
 ### Generating Secrets
 

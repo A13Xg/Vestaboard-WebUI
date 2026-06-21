@@ -30,9 +30,9 @@ Iron Session stores a single `isAuthenticated` boolean in an encrypted, signed c
 | `httpOnly` | `true` — JavaScript cannot read the cookie |
 | `sameSite` | `lax` — sent on same-site requests and top-level GET navigations |
 | `maxAge` | 86 400 s (24 hours) |
-| `secure` | `true` only when `SECURE_COOKIES=true` is explicitly set |
+| `secure` | `true` when `NODE_ENV=production`; overridable via `SECURE_COOKIES=true\|false` |
 
-The `secure` flag is **off by default** so the launchers (`run.sh` / `runWebApp.bat`) work over plain HTTP without any browser cookie issues. Set `SECURE_COOKIES=true` in HTTPS environments (Vercel, Docker behind a reverse proxy, any TLS-terminated host).
+The default is **fail-closed**: secure cookies are on in production and off in development. The local launchers (`run.sh` / `runWebApp.bat`) pass `SECURE_COOKIES=false` automatically so plain-HTTP localhost works without any configuration. HTTPS deployments (Vercel, Docker behind TLS) get secure cookies from the production default with no extra env var needed.
 
 ## Server-Side Proxy Pattern
 
